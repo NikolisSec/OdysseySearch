@@ -12,7 +12,7 @@ download through **Real-Debrid**, all inside a fast terminal UI.
 - **Smart ranking** — relevance-weighted results, so `ubuntu 24.04` shows Ubuntu ISOs,
   not whatever spam has the most seeds
 - **Infohash dedup** — the same torrent found on 3 trackers is one row (`TPB+1337x`)
-- **Bait filter** — `[REAL]` / `Full Version` / `Direct Download` SEO traps are dropped automatically
+- **Bait filter** — `[REAL]` / `Full Version` / `Direct Download` SEO traps are dropped automatically (yes, it's personal)
 - **Category badges** — 📺 TV · 🎬 movies · 🎮 games · 🎵 music · 📚 books · 💾 software · 🌸 anime
 - **Real-Debrid pipeline** — magnet → cloud cache → unrestricted links → download with progress
 - **Multi-select queue** — mark with `Space`, press `d`, walk away
@@ -77,4 +77,5 @@ vhs demo.tape     # writes docs/demo.gif
 ## Disclaimer
 
 For educational purposes. Downloading copyrighted material may be illegal in your
-country — you are responsible for what you do with this tool.
+country — you are responsible for what you do with this tool. It works on my machine,
+which is the important part.

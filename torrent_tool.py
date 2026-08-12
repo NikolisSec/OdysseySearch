@@ -571,7 +571,11 @@ def cmd_download(args):
                 indices=[int(x) for x in args.get.split(",")]
                 all_links=[links[i] for i in indices if 0<=i<len(links)]
             except: pass
-        for lk in all_links: download_file(lk['u'],lk['f'])
+        for lk in all_links:
+            try:
+                download_file(lk['u'],lk['f'])
+            except Exception as e:
+                print(f"Failed: {lk['f']} ({e})")
 
 def cmd_token(args):
     if not args.token:
