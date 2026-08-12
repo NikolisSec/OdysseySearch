@@ -1,0 +1,4 @@
+requests>=2.31
+cryptography>=41
+textual>=0.60
+beautifulsoup4>=4.12

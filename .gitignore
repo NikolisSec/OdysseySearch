@@ -1,0 +1,14 @@
+# python cruft
+__pycache__/
+*.pyc
+*.pyo
+
+# private tracker .torrent files contain your passkey. do NOT commit them. ever.
+*.torrent
+
+# partial downloads / browser junk
+*.part
+.playwright-mcp/
+
+# local settings live in ~/.torrent_tool anyway, but just in case
+settings.db
