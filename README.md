@@ -1,5 +1,8 @@
 # ⚡ Odyssey Searcher
 
+**v1.0 Beta** — feature-complete enough to be useful, young enough to make
+excuses. the story so far lives in [CHANGELOG.md](CHANGELOG.md).
+
 Search 8 public trackers at once, dedupe the noise, and push whatever you pick
 through **Real-Debrid** — from a terminal that doesn't look like 1995.
 
@@ -86,7 +89,7 @@ python odyssey.py ui     # same thing, but louder
 | `?` | help · `q` quit |
 
 search syntax: `min:N` hides anything under N seeders.
-`frieren 1080p min:20` → only non-bait frieren at 1080p with 20+ seeders.
+`Mr. Robot 1080p min:20` → only non-bait Mr. Robot at 1080p with 20+ seeders.
 
 ### CLI (same engine, scriptable)
 
@@ -135,7 +138,8 @@ this tool is: search + debrid in one terminal screen.
 
 ## demo
 
-`docs/screenshot.svg` and `docs/help.svg` are real captures, not mockups.
+as of v1.0 Beta, `docs/screenshot.svg` and `docs/help.svg` are real captures,
+not mockups. the screenshot is a Mr. Robot search gone very well.
 
 want an animated one? install [vhs](https://github.com/charmbracelet/vhs) and:
 
