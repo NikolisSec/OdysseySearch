@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Odyssey Searcher - TUI + CLI torrent search + Real-Debrid downloader"""
+
 import os, sys, sqlite3, json, re, hashlib, base64, urllib.parse
 import requests, time, shutil, argparse, threading, math
 from pathlib import Path
@@ -7,11 +7,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-_OLD_APP_DIR = Path.home() / ".torrent_tool"
-APP_DIR = Path.home() / ".odyssey"
-if not APP_DIR.exists() and _OLD_APP_DIR.exists():  # one-time rename in
-    shutil.move(str(_OLD_APP_DIR), str(APP_DIR))
-APP_DIR.mkdir(exist_ok=True)
+APP_DIR = Path.home() / ".odyssey"; APP_DIR.mkdir(exist_ok=True)
 DB_PATH = APP_DIR / "settings.db"
 DL_DIR  = Path.home() / "Downloads" / "Odyssey"; DL_DIR.mkdir(exist_ok=True)
 SALT_FILE = APP_DIR / ".salt"; KEY_FILE = APP_DIR / ".key"
@@ -26,9 +22,6 @@ def _dk():
     key = base64.urlsafe_b64encode(kdf.derive(mid)); KEY_FILE.write_bytes(key); return key
 
 class DB:
-    """One hidden sqlite database for everything local: config (encrypted secrets),
-    search history, a downloads log, a blacklist, and a tiny TTL cache.
-    Lives in ~/.odyssey so it never leaks into the repo."""
     def __init__(self):
         self._lock = threading.Lock()
         self.c = sqlite3.connect(str(DB_PATH), check_same_thread=False)
@@ -43,7 +36,6 @@ class DB:
         self._rearm_secrets()
     def _rearm_secrets(self):
         # if a plaintext token survived from before we added encryption, lock it up.
-        # one-time, invisible, and the whole point of a hidden db is not leaking it.
         try:
             r = self.c.execute("SELECT v,enc FROM config WHERE k='rd_api_token'").fetchone()
             if r and not r[1]:
@@ -53,7 +45,6 @@ class DB:
         except Exception:
             pass
     def _migrate_history(self):
-        # history used to be a JSON blob in config; fold it into the real table once
         try:
             raw = self.c.execute("SELECT v FROM config WHERE k='history'").fetchone()
             if raw:
@@ -92,7 +83,6 @@ def hist_clear():
     try: db.execute("DELETE FROM history")
     except Exception: pass
 
-# ── local db extras: blacklist / prefs / downloads log / ttl cache ──
 def blk_add(ih, reason="manual"):
     try: db.execute("INSERT OR REPLACE INTO blacklist(ih,reason,ts) VALUES(?,?,?)", (ih, reason, time.time()))
     except Exception: pass
@@ -113,7 +103,6 @@ def pref_set(k, v):
     try: db.set("pref:"+k, str(v), e=False)
     except Exception: pass
 def apply_prefs():
-    """Re-read persistent prefs into module globals (call once at startup)."""
     global DL_DIR
     d = pref_get("dl_dir")
     if d:
@@ -135,7 +124,7 @@ def cache_get(k):
             db.execute("DELETE FROM cache WHERE k=?", (k,)); return None
         return r[0][0]
     except Exception: return None
-def cache_set(k, v, ttl=43200):  # 12h default: what's cached today might change tomorrow
+def cache_set(k, v, ttl=43200):
     try: db.execute("INSERT OR REPLACE INTO cache(k,v,expires) VALUES(?,?,?)", (k, v, time.time()+ttl))
     except Exception: pass
 
@@ -167,7 +156,6 @@ TRACKERS = ("&tr=udp://tracker.opentrackr.org:1337/announce"
             "&tr=udp://tracker.torrent.eu.org:451/announce")
 def magnet_for(ih): return f"magnet:?xt=urn:btih:{ih}{TRACKERS}" if ih else ""
 
-# ── Category badges (name heuristics; first match wins) ──
 CAT_RULES = [
     ("🌸", re.compile(r'^\[(erai|subsplease|.*raws|.*subs)\]', re.I)),                      # weebs get their own badge. you're welcome.
     ("📺", re.compile(r'\bs\d{1,2}e\d{1,2}\b|\bseason\s*\d+\b|hdtv|\bcomplete\s+series\b', re.I)),
@@ -178,12 +166,10 @@ CAT_RULES = [
     ("💾", re.compile(r'\b(crack|keygen|portable|activated|iso)\b', re.I)),
 ]
 def cat_badge(name):
-    """Emoji badge guessed from the release name ('·' if unknown)."""
     for b, rx in CAT_RULES:
         if rx.search(str(name or '')): return b
     return "·"
 
-# ── Search ──
 def search_solidtorrents(q,n=30):
     r=[]
     try:
@@ -364,9 +350,6 @@ ENGINES = [("SolidTorrents", search_solidtorrents),
 NO_MAGNET_ENGINES = {"1337x", "Torlock", "Lime"}
 
 def dedupe_sort(all_r):
-    """Same hash, different trenchcoat -> one row, many sources ('TPB+1337x').
-    Dedupes by infohash (fallback: name hash), keeps the highest-seeded copy,
-    backfills magnet/web/size. Sorted by seeders desc."""
     best={}
     for r in all_r:
         m=BTIH_RE.search(r.get('mag') or '')
@@ -384,7 +367,6 @@ def dedupe_sort(all_r):
     return sorted(best.values(), key=lambda x: x['s'], reverse=True)
 
 def parse_query(q):
-    """Extract filter tokens from a query. Supports: min:SEEDS. Returns (clean_query, min_seeds)."""
     min_seeds=0; toks=[]
     for t in q.split():
         m=re.match(r'min:(\d+)$',t,re.I)
@@ -393,7 +375,6 @@ def parse_query(q):
     return ' '.join(toks), min_seeds
 
 def smart_score(r, qtokens, qfull):
-    """Relevance + seeders. spam farms hate this one weird trick."""
     tl=r['n'].lower()
     matched=sum(1 for t in qtokens if t in tl)
     rel=matched/max(len(qtokens),1)
@@ -404,8 +385,6 @@ def smart_score(r, qtokens, qfull):
 JUNK_RE = re.compile(r'(\[real\]|\bfull version\b|\bhigh-definition\b|\blatest top release\b|\bdirect download\b)', re.I)
 
 def rank_filter(results, query='', sort='smart', min_seeds=0, src=None, cached=None):
-    """Filter (bait titles / blacklisted / min seeders / source / cached-only) and sort
-    (smart|seeds|size|name) a result list."""
     blk = blk_get()
     out=[r for r in results if r['s']>=min_seeds and (not src or src in r['src'])
          and not JUNK_RE.search(r['n']) and r.get('_id') not in blk
@@ -432,7 +411,7 @@ def search_all(query):
     results_q=[]
     def _run(name,fn):
         res=fn(query)
-        if name in NO_MAGNET_ENGINES:  # prefetch magnets for top results (details-page scrape)
+        if name in NO_MAGNET_ENGINES:
             s=requests.Session(); s.headers.update(HEADERS)
             for x in res[:6]:
                 if not x.get('mag') and x.get('web'):
@@ -458,10 +437,7 @@ def search_all(query):
     for name,cnt,res in results_q: counts[name]=cnt; all_r.extend(res)
     return dedupe_sort(all_r),counts
 
-# ── RD ──
 def rd_request(method, path, data=None):
-    """Call the Real-Debrid API. Never raises: returns {} for empty bodies (204),
-    or {"error": ...} on HTTP/network/JSON failures."""
     token = db.get("rd_api_token")
     if not token: return {"error": "RD token not configured. Run: odyssey.py token <your-token>"}
     h = {"Authorization": f"Bearer {token}"}
@@ -479,9 +455,6 @@ def rd_request(method, path, data=None):
     except ValueError: return {}
 
 def rd_stats():
-    """Normalized RD account stats. fun fact: 'premium' comes back in SECONDS,
-    because days would be too easy. /traffic is a per-hoster dict, so we sum
-    'left' over gigabytes-type hosters. Returns None on error."""
     u = rd_request("GET", "/user")
     if "error" in u: return None
     traf = rd_request("GET", "/traffic")
@@ -535,9 +508,6 @@ def rd_wait(tid, timeout=600):
     return None
 
 def rd_instant(hashes):
-    """Which of these infohashes are already sitting in RD's cache?
-    One batched GET, hashes comma-separated (the API allows ~50). Returns a
-    set of cached hashes (lowercased). Never raises."""
     token = db.get("rd_api_token")
     if not token or not hashes: return set()
     h = {"Authorization": f"Bearer {token}"}
@@ -550,10 +520,6 @@ def rd_instant(hashes):
         return set()
 
 def stamp_cached(results, maxn=40):
-    """Best-effort: mark rows that are instant-available on RD with rd_cached=True.
-    Checks the top maxn rows (the ones worth clicking), batches 50 hashes/call,
-    and remembers each hash in the local cache for 12h so repeat searches are free.
-    Never raises — if RD is missing or grumpy, the ⚡ badges just don't show up."""
     token = db.get("rd_api_token")
     if not token or not results: return
     want = {}
@@ -566,7 +532,7 @@ def stamp_cached(results, maxn=40):
     for rid, hsh in want.items():
         c = cache_get("inst:" + hsh)
         if c == "1": rowmap[rid]["rd_cached"] = True
-        elif c is None: miss.append((rid, hsh))   # "0" = known-not-cached, skip
+        elif c is None: miss.append((rid, hsh))
     for i in range(0, len(miss), 50):
         got = rd_instant([h for _, h in miss[i:i+50]])
         for rid, hsh in miss[i:i+50]:
@@ -591,21 +557,16 @@ def rd_delete(idx):
         rd_request("DELETE",f"/torrents/delete/{tor[idx]['id']}")
         print(f"Deleted: {tor[idx].get('filename','?')[:60]}")
 
-# ── Download ──
 def download_file(url, fn, cb=None):
-    """Download url to DL_DIR (atomic: .part -> rename). cb(dl_bytes, total_bytes, speed_mbps)
-    is called on progress; when cb is None, a CLI progress bar goes to stderr instead.
-    Returns saved path. Raises on HTTP/network errors (no more error-pages-saved-as-movies)."""
     dest=DL_DIR
     fn=re.sub(r'[<>:"/\\|?*]','_',fn).strip() or "download.bin"
-    # windows still thinks 260 chars is plenty of path. it is not. trim the novel.
     if len(fn)>150:
         stem,_,ext=fn.rpartition('.')
         fn=(stem[:150]+'.'+ext) if ext and len(ext)<=10 else fn[:150]
     stem0,_,ext0=fn.rpartition('.')
     ext0=('.'+ext0) if ext0 else ''
     last=None
-    for attempt in (1,2):  # one retry, because CDNs have moods
+    for attempt in (1,2):
         tmp=None
         try:
             r=requests.get(url,stream=True,timeout=60)
@@ -618,7 +579,7 @@ def download_file(url, fn, cb=None):
                 dl_log(fn, str(fp), total, "ok")
                 return str(fp)
             n=1
-            while fp.exists():  # same name, different file -> don't clobber
+            while fp.exists():
                 n+=1; fp=dest/f"{stem0} ({n}){ext0}"
             if not cb: print(f"Downloading: {fp.name}")
             dl=0; t0=time.time(); tmp=fp.with_name(fp.name+'.part')
@@ -632,7 +593,7 @@ def download_file(url, fn, cb=None):
                         bar='#'*fw+'-'*(bar_w-fw)
                         sys.stderr.write(f"\r[{bar}] {pct:.0f}%  {dl/1048576:.0f}/{total/1048576:.0f}MB  {speed:.1f}MB/s  "); sys.stderr.flush()
             if total and dl<total: raise IOError(f"incomplete download ({dl}/{total} bytes)")
-            tmp.replace(fp)  # atomic: no half-downloaded files cosplaying as complete ones
+            tmp.replace(fp)
             dl_log(fp.name, str(fp), total, "ok")
             if cb: return str(fp)
             print(f"\nSaved: {fp}")
@@ -645,7 +606,7 @@ def download_file(url, fn, cb=None):
             if attempt==1: time.sleep(2)
     raise last
 
-# ── CLI ──
+
 def cmd_search(args):
     if not args.query:
         print("Usage: odyssey.py search <query> [--sort smart|seeds|size|name] [--min-seeds N] [--cached]"); return
@@ -653,7 +614,7 @@ def cmd_search(args):
     min_seeds=args.min_seeds or ms
     print(f"Searching for: {query}")
     results,counts=search_all(query)
-    stamp_cached(results)  # ⚡ instant on RD?
+    stamp_cached(results)
     if args.cached and not db.get("rd_api_token"):
         print("(cached filter needs an RD token: odyssey.py token <token>)")
     results=rank_filter(results,query,sort=args.sort,min_seeds=min_seeds,cached=args.cached)
@@ -748,7 +709,6 @@ def cmd_rd(args):
     else:
         rd_list()
 
-# ── TUI (textual) ──
 try:
     from textual import work
     from textual.app import App, ComposeResult
@@ -939,7 +899,6 @@ if TUI_OK:
         def action_cancel(self): self.dismiss(None)
 
     class TorrentApp(App):
-        """⚡ Odyssey Searcher — interactive terminal UI."""
         TITLE = "Odyssey Searcher"
         CSS = """
         Screen { background: #0d1117; }
@@ -981,17 +940,17 @@ if TUI_OK:
 
         def __init__(self):
             super().__init__()
-            self.results = []      # all deduped results from last search
-            self.view = []         # filtered/sorted rows currently shown
+            self.results = []
+            self.view = []
             self.query = ""
             self.sort_mode = "smart" if pref_get("sort", "smart") not in SORT_MODES else pref_get("sort", "smart")
             self.src_filter = None
             self.min_seeds = 0
             self.cached_only = False
             self._counts = {}
-            self.marked = set()    # _id set of multi-selected rows
-            self._queue = []       # pending multi-download rows
-            self._hist_i = -1      # -1 = editing, >=0 = browsing history
+            self.marked = set()
+            self._queue = []
+            self._hist_i = -1
             self._hist_draft = ""
 
         def compose(self) -> ComposeResult:
@@ -1005,7 +964,6 @@ if TUI_OK:
                 yield ProgressBar(total=100, show_percentage=True, show_eta=False, id="pbar")
             yield Footer()
 
-        # ── helpers ──
         def _status(self, txt): self.query_one("#status", Static).update(txt)
         def _rd_label(self, txt): self.query_one("#rd-status", Static).update(txt)
         def _progress(self, pct, txt):
@@ -1020,7 +978,6 @@ if TUI_OK:
             idx = min(max(self.query_one("#results", DataTable).cursor_row, 0), len(self.view) - 1)
             return idx, self.view[idx]
 
-        # ── lifecycle ──
         def on_mount(self):
             self.query_one("#results", DataTable).add_columns("#", "⚡", "Cat", "Seeds", "Leech", "Size", "Source", "Name")
             self._hide_pbar()
@@ -1032,7 +989,6 @@ if TUI_OK:
         def action_status(self): self._refresh_rd()
         def action_help(self): self.push_screen(HelpScreen())
 
-        # ── multi-select ──
         def action_mark(self):
             idx, r = self._current()
             if r is None: return
@@ -1046,7 +1002,6 @@ if TUI_OK:
                 self.marked.clear()
                 self._apply_view()
 
-        # ── search history (↑/↓ inside the search box) ──
         def action_hist_prev(self):
             inp = self.query_one("#search", Input)
             if self.focused is not inp: return
@@ -1064,7 +1019,6 @@ if TUI_OK:
             inp.value = self._hist_draft if self._hist_i == -1 else hist_get()[self._hist_i]
             inp.cursor_position = len(inp.value)
 
-        # ── sort / filter ──
         def _view_label(self):
             parts = [f"sort:{self.sort_mode}"]
             if self.src_filter: parts.append(f"src:{self.src_filter}")
@@ -1104,7 +1058,7 @@ if TUI_OK:
 
         def action_sort(self):
             self.sort_mode = SORT_MODES[(SORT_MODES.index(self.sort_mode) + 1) % len(SORT_MODES)]
-            pref_set("sort", self.sort_mode)  # remember your favorite
+            pref_set("sort", self.sort_mode)
             self._apply_view()
 
         def action_hide(self):
@@ -1135,7 +1089,6 @@ if TUI_OK:
             self.src_filter = None; self.min_seeds = 0; self.cached_only = False
             self._apply_view()
 
-        # ── search ──
         def on_input_submitted(self, event):
             q = event.value.strip()
             if q:
@@ -1161,7 +1114,7 @@ if TUI_OK:
             for t in ts: t.start()
             for t in ts: t.join()
             results = dedupe_sort(bag)
-            stamp_cached(results)  # ⚡ which of these are instant on RD?
+            stamp_cached(results)
             self.call_from_thread(self._search_done, results, counts)
 
         def _search_done(self, results, counts):
@@ -1174,9 +1127,7 @@ if TUI_OK:
                 srcs = " · ".join(f"{k}: {v}" for k, v in counts.items())
                 self._status(f"[#f85149]✗ No results[/] for {self.query}  ({srcs})")
 
-        # ── download pipeline ──
         def on_data_table_row_selected(self, event):
-            # Enter acts on the current row only (marks are for d)
             r = self.view[int(event.row_key.value)]
             self._start_pipeline(r)
 
@@ -1279,7 +1230,6 @@ if TUI_OK:
 
         @work(thread=True, group="dl", exclusive=True)
         def _dl_worker(self, links):
-            # the conveyor belt: cache -> pick files -> download -> next in queue
             n = len(links); saved = 0
             for i, lk in enumerate(links, 1):
                 def cb(dl, total, speed, i=i, f=lk["f"]):
@@ -1298,7 +1248,7 @@ if TUI_OK:
 
         def _after_downloads(self, saved, n):
             if self._queue:
-                self._drain_queue()  # next marked torrent
+                self._drain_queue()
             else:
                 self._status(f"[#3fb950]✓ {saved}/{n} file(s)[/] saved to [#79c0ff]{DL_DIR}[/]")
                 self._refresh_rd()
@@ -1331,7 +1281,6 @@ if TUI_OK:
             except Exception:
                 self.notify("✗ Clipboard unavailable in this terminal", severity="error")
 
-        # ── token / RD cloud / status ──
         def action_token(self):
             self.push_screen(TokenScreen(), self._token_done)
 

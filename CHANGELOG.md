@@ -1,18 +1,12 @@
-# changelog
+## v1.0 Beta - "odyssey"
 
-newest first. if it's not here, it never happened.
+First public release. it's a beta and it says so out loud, so you can't
+complain about bugs.
 
-## v1.0 Beta — "odyssey"
-
-first public release. it's a beta and it says so out loud, so you can't
-complain that it eats a rare edge case. mostly it doesn't.
-
-- renamed from "torrent tool" — because one thing, one download isn't a
-  journey. the name finally fits.
 - search 8 trackers in parallel: SolidTorrents, TPB, 1337x, TorrentsCSV, Nyaa,
   BitSearch, Torlock, LimeTorrents. duplicates merged by infohash, SEO bait
   filtered, smart ranking on by default.
-- ⚡ instant badge — results already cached on Real-Debrid get flagged, `c`
+- ⚡ instant badge - results already cached on Real-Debrid get flagged, `c`
   toggles cached-only. the feature everyone will actually use.
 - Real-Debrid pipeline: magnet → cache → unrestricted links → download. your
   ISP sees one https connection and nothing else.
