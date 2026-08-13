@@ -10,7 +10,7 @@ Set TypingSpeed 60ms
 Launch python odyssey.py
 
 Sleep 2s
-Type "frieren 1080p"
+Type "Mr. Robot 1080p"
 Sleep 500ms
 Enter
 Sleep 8s
