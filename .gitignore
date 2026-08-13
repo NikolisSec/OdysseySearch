@@ -12,3 +12,6 @@ __pycache__/
 
 # local settings live in ~/.torrent_tool anyway, but just in case
 settings.db
+
+# throwaway safety copies, not source of truth
+backup/

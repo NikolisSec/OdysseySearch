@@ -311,9 +311,11 @@ def smart_score(r, qtokens, qfull):
 # SEO-bait titles ([REAL]! Full Version!! Direct Download!!1). torlock, we're looking at you.
 JUNK_RE = re.compile(r'(\[real\]|\bfull version\b|\bhigh-definition\b|\blatest top release\b|\bdirect download\b)', re.I)
 
-def rank_filter(results, query='', sort='smart', min_seeds=0, src=None):
-    """Filter (bait titles / min seeders / source) and sort (smart|seeds|size|name) a result list."""
-    out=[r for r in results if r['s']>=min_seeds and (not src or src in r['src']) and not JUNK_RE.search(r['n'])]
+def rank_filter(results, query='', sort='smart', min_seeds=0, src=None, cached=None):
+    """Filter (bait titles / min seeders / source / cached-only) and sort
+    (smart|seeds|size|name) a result list."""
+    out=[r for r in results if r['s']>=min_seeds and (not src or src in r['src'])
+         and not JUNK_RE.search(r['n']) and (not cached or r.get('rd_cached'))]
     if sort=='seeds': out.sort(key=lambda x: x['s'], reverse=True)
     elif sort=='size': out.sort(key=lambda x: x['szr'], reverse=True)
     elif sort=='name': out.sort(key=lambda x: x['n'].lower())
@@ -438,6 +440,41 @@ def rd_wait(tid, timeout=600):
         time.sleep(1.5)
     return None
 
+def rd_instant(hashes):
+    """Which of these infohashes are already sitting in RD's cache?
+    One batched GET, hashes comma-separated (the API allows ~50). Returns a
+    set of cached hashes (lowercased). Never raises."""
+    token = db.get("rd_api_token")
+    if not token or not hashes: return set()
+    h = {"Authorization": f"Bearer {token}"}
+    u = f"https://api.real-debrid.com/rest/1.0/torrents/instantAvailability/{','.join(x.lower() for x in hashes)}"
+    try:
+        r = requests.get(u, headers=h, timeout=TIMEOUT)
+        if r.status_code != 200: return set()
+        return {hs.lower() for hs, v in r.json().items() if v}
+    except (requests.RequestException, ValueError):
+        return set()
+
+def stamp_cached(results, maxn=40):
+    """Best-effort: mark rows that are instant-available on RD with rd_cached=True.
+    Checks the top maxn rows (the ones worth clicking), batches 50 hashes/call.
+    Never raises — if RD is missing or grumpy, the ⚡ badges just don't show up."""
+    token = db.get("rd_api_token")
+    if not token or not results: return
+    want = {}
+    for r in results[:maxn]:
+        m = BTIH_RE.search(r.get("mag") or "")
+        if m and r.get("_id"): want[r["_id"]] = m.group(1).lower()
+    if not want: return
+    rowmap = {r.get("_id"): r for r in results if r.get("_id")}
+    cached = set()
+    hs = list(want.values())
+    for i in range(0, len(hs), 50):
+        cached |= rd_instant(hs[i:i+50])
+    for rid, hsh in want.items():
+        if hsh in cached and rid in rowmap:
+            rowmap[rid]["rd_cached"] = True
+
 def rd_list():
     tor=rd_request("GET","/torrents")
     if "error" in tor: print(f"Error: {tor['error']}"); return
@@ -510,18 +547,22 @@ def download_file(url, fn, cb=None):
 # ── CLI ──
 def cmd_search(args):
     if not args.query:
-        print("Usage: torrent_tool.py search <query> [--sort smart|seeds|size|name] [--min-seeds N]"); return
+        print("Usage: torrent_tool.py search <query> [--sort smart|seeds|size|name] [--min-seeds N] [--cached]"); return
     query,ms=parse_query(args.query)
     min_seeds=args.min_seeds or ms
     print(f"Searching for: {query}")
     results,counts=search_all(query)
-    results=rank_filter(results,query,sort=args.sort,min_seeds=min_seeds)
+    stamp_cached(results)  # ⚡ instant on RD?
+    if args.cached and not db.get("rd_api_token"):
+        print("(cached filter needs an RD token: torrent_tool.py token <token>)")
+    results=rank_filter(results,query,sort=args.sort,min_seeds=min_seeds,cached=args.cached)
     if not results: print("No results."); return
     srcs=" | ".join(f"{k}: {v}" for k,v in counts.items())
-    print(f"\n{len(results)} results ({srcs}) sort={args.sort} min_seeds={min_seeds}\n")
+    print(f"\n{len(results)} results ({srcs}) sort={args.sort} min_seeds={min_seeds}{' cached-only' if args.cached else ''}\n")
     hist_add(query)
     for i,r in enumerate(results[:args.limit]):
-        print(f"[{i:>3}] {cat_badge(r['n'])} {r['s']:>5}S {r['l']:>5}L  {r['sz']:>10}  {r['src']:<20}  {tr(r['n'],60)}")
+        badge="⚡" if r.get("rd_cached") else " "
+        print(f"[{i:>3}] {badge} {cat_badge(r['n'])} {r['s']:>5}S {r['l']:>5}L  {r['sz']:>10}  {r['src']:<20}  {tr(r['n'],60)}")
         if args.detail:
             if r.get('mag'): print(f"      magnet: {r['mag'][:70]}...")
             if r.get('web'): print(f"      web: {r['web']}")
@@ -766,8 +807,10 @@ if TUI_OK:
   [#58d6eb]Esc[/]        clear marks
   [#58d6eb]o[/]          sort: smart → seeds → size → name
   [#58d6eb]f[/]          filter by source
-  [#58d6eb]c[/]          clear filters
+  [#58d6eb]c[/]          toggle ⚡ cached-only (instant on RD)
+  [#58d6eb]C[/]          clear all filters
   [#58d6eb]m[/]          copy magnet link
+  [#8b949e]⚡ in the table = already in RD's cache → instant download[/]
 
 [bold #79c0ff]REAL-DEBRID[/]
   [#58d6eb]t[/]          set API token
@@ -821,10 +864,11 @@ if TUI_OK:
             Binding("d", "download", "Download"),
             Binding("o", "sort", "Sort"),
             Binding("f", "filter_src", "Filter"),
+            Binding("c", "toggle_cached", "Cached"),
             Binding("t", "token", "Token"),
             Binding("r", "rd", "RD cloud"),
             Binding("m", "copy_magnet", "Copy magnet", show=False),
-            Binding("c", "clear_filters", "Clear", show=False),
+            Binding("shift+c", "clear_filters", "Clear", show=False),
             Binding("s", "status", "Refresh", show=False),
             Binding("escape", "clear_marks", show=False),
             Binding("up", "hist_prev", show=False),
@@ -839,6 +883,7 @@ if TUI_OK:
             self.sort_mode = "smart"
             self.src_filter = None
             self.min_seeds = 0
+            self.cached_only = False
             self._counts = {}
             self.marked = set()    # _id set of multi-selected rows
             self._queue = []       # pending multi-download rows
@@ -873,7 +918,7 @@ if TUI_OK:
 
         # ── lifecycle ──
         def on_mount(self):
-            self.query_one("#results", DataTable).add_columns("#", "Cat", "Seeds", "Leech", "Size", "Source", "Name")
+            self.query_one("#results", DataTable).add_columns("#", "⚡", "Cat", "Seeds", "Leech", "Size", "Source", "Name")
             self._hide_pbar()
             self.query_one("#search", Input).focus()
             self._status(f"[#8b949e]Type a query, hit Enter — {len(ENGINES)} engines · try[/] min:10 [#8b949e]to filter seeders[/]")
@@ -920,19 +965,21 @@ if TUI_OK:
             parts = [f"sort:{self.sort_mode}"]
             if self.src_filter: parts.append(f"src:{self.src_filter}")
             if self.min_seeds: parts.append(f"min:{self.min_seeds}")
+            if self.cached_only: parts.append("⚡cached")
             return " · ".join(parts)
 
         def _apply_view(self, cursor_to=None):
             if not self.results and not self._counts:
                 self._status(f"[#8b949e]Type a query, hit Enter — {len(ENGINES)} engines · try[/] min:10 [#8b949e]to filter seeders[/]")
                 return
-            self.view = rank_filter(self.results, self.query, self.sort_mode, self.min_seeds, self.src_filter)
+            self.view = rank_filter(self.results, self.query, self.sort_mode, self.min_seeds, self.src_filter, self.cached_only)
             t = self.query_one("#results", DataTable)
             t.clear()
             for i, r in enumerate(self.view):
                 marked = r.get("_id") in self.marked
                 t.add_row(Text(("✓" if marked else " ") + str(i),
                                style="bold #3fb950" if marked else "#8b949e"),
+                          Text("⚡" if r.get("rd_cached") else "", style="#f0c674" if r.get("rd_cached") else ""),
                           Text(cat_badge(r["n"])),
                           _seeds_cell(r["s"]),
                           _leech_cell(r["l"]),
@@ -947,7 +994,9 @@ if TUI_OK:
             if self.view:
                 self._status(f"[#3fb950]✓[/] {len(self.view)} shown / {len(self.results)} found · [#79c0ff]{self._view_label()}[/]{marks}  ({srcs})")
             else:
-                self._status(f"[#f85149]✗ Nothing matches[/] · {self._view_label()} · press c to clear filters")
+                hint = ("cached-only — press c to show everything again" if self.cached_only
+                        else "press C to clear filters")
+                self._status(f"[#f85149]✗ Nothing matches[/] · {self._view_label()} · {hint}")
 
         def action_sort(self):
             self.sort_mode = SORT_MODES[(SORT_MODES.index(self.sort_mode) + 1) % len(SORT_MODES)]
@@ -961,8 +1010,14 @@ if TUI_OK:
             self.src_filter = opts[(i + 1) % len(opts)]
             self._apply_view()
 
+        def action_toggle_cached(self):
+            self.cached_only = not self.cached_only
+            if self.cached_only and not db.get("rd_api_token"):
+                self.notify("⚠ Cached-only needs an RD token — press t to set one", severity="warning")
+            self._apply_view()
+
         def action_clear_filters(self):
-            self.src_filter = None; self.min_seeds = 0
+            self.src_filter = None; self.min_seeds = 0; self.cached_only = False
             self._apply_view()
 
         # ── search ──
@@ -990,7 +1045,9 @@ if TUI_OK:
             ts = [threading.Thread(target=run, args=e, daemon=True) for e in ENGINES]
             for t in ts: t.start()
             for t in ts: t.join()
-            self.call_from_thread(self._search_done, dedupe_sort(bag), counts)
+            results = dedupe_sort(bag)
+            stamp_cached(results)  # ⚡ which of these are instant on RD?
+            self.call_from_thread(self._search_done, results, counts)
 
         def _search_done(self, results, counts):
             self.results = results
@@ -1207,6 +1264,7 @@ def main():
     srch.add_argument("-d","--detail",action="store_true",help="Show magnet/URL")
     srch.add_argument("--sort",choices=["smart","seeds","size","name"],default="seeds",help="Sort order (default: seeds)")
     srch.add_argument("--min-seeds",type=int,default=0,metavar="N",help="Only show results with >= N seeders")
+    srch.add_argument("--cached",action="store_true",help="Only show results already cached on RD (⚡)")
     srch.add_argument("--download",type=int,metavar="IDX",help="Download result by index")
 
     dl=sub.add_parser("download",help="Download via RD")

@@ -15,6 +15,7 @@ download through **Real-Debrid**, all inside a fast terminal UI.
 - **Bait filter** — `[REAL]` / `Full Version` / `Direct Download` SEO traps are dropped automatically (yes, it's personal)
 - **Category badges** — 📺 TV · 🎬 movies · 🎮 games · 🎵 music · 📚 books · 💾 software · 🌸 anime
 - **Real-Debrid pipeline** — magnet → cloud cache → unrestricted links → download with progress
+- **⚡ Instant badge** — results already sitting in RD's cache are flagged before you click; `c` flips to *cached-only*
 - **Multi-select queue** — mark with `Space`, press `d`, walk away
 - **Search history**, live sort/filter, keybinding help — and a full **CLI** for scripting
 - **Encrypted config** — your RD token is stored Fernet-encrypted, keyed to your machine
@@ -43,7 +44,9 @@ python torrent_tool.py ui     # same, explicitly
 | `Enter` | download this torrent |
 | `Space` | mark / unmark (multi-download) · `Esc` clears |
 | `o` | sort: smart → seeds → size → name |
-| `f` / `c` | filter by source / clear filters |
+| `f` | filter by source |
+| `c` | toggle ⚡ cached-only (instant on RD) |
+| `C` | clear all filters |
 | `m` | copy magnet |
 | `t` / `r` / `s` | RD token / cloud manager / refresh |
 | `?` | help · `q` quit |
@@ -54,6 +57,7 @@ Search supports `min:N` — e.g. `frieren 1080p min:20` hides anything under 20 
 
 ```bash
 python torrent_tool.py search "ubuntu 24.04" --sort smart --min-seeds 5 -n 10
+python torrent_tool.py search "frieren" --cached --sort smart     # only ⚡ instant results
 python torrent_tool.py search "frieren" --download 0      # send result #0 to RD
 python torrent_tool.py download "magnet:?xt=..."          # direct magnet
 python torrent_tool.py status                             # account/traffic info
