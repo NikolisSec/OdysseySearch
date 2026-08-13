@@ -10,7 +10,7 @@ __pycache__/
 *.part
 .playwright-mcp/
 
-# local settings live in ~/.torrent_tool anyway, but just in case
+# local settings live in ~/.odyssey anyway, but just in case
 settings.db
 
 # throwaway safety copies, not source of truth

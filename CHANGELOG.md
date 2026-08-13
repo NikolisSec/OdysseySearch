@@ -2,7 +2,15 @@
 
 all notable changes, roughly in the order i remembered to write them down.
 
-## 0.4.0 — current, unreleased
+## 0.5.0 — odyssey
+
+- renamed from "torrent tool". one thing, one download — that's not a journey.
+  the name finally fits.
+- local data moves from `~/.torrent_tool` to `~/.odyssey` on first run, on its
+  own. history, blacklist, prefs all come along.
+- file is `odyssey.py` now. update any shell scripts / muscle memory.
+
+## 0.4.0 — the ⚡ era
 
 - **⚡ instant badge** — results already in RD's cache get flagged; `c` toggles
   cached-only. CLI gets `--cached`. the feature i actually use the most.

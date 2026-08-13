@@ -1,4 +1,4 @@
-# ⚡ Torrent Tool
+# ⚡ Odyssey Searcher
 
 Search 8 public trackers at once, dedupe the noise, and push whatever you pick
 through **Real-Debrid** — from a terminal that doesn't look like 1995.
@@ -6,7 +6,8 @@ through **Real-Debrid** — from a terminal that doesn't look like 1995.
 ![screenshot](docs/screenshot.svg)
 
 > this started as a "fine, i'll write my own" project because i got tired of
-> opening five tracker tabs and copy-pasting magnets. then it got ideas.
+> opening five tracker tabs and copy-pasting magnets. it was called "torrent
+> tool" for a while — accurate, and *so boring*. meet odyssey.
 
 ## what it actually does
 
@@ -43,7 +44,7 @@ then the Real-Debrid part takes over:
   click, and `c` flips to cached-only. the feature i actually use the most.
 - **multi-select queue** — mark a handful, press `d`, walk away.
 - **hidden local db** — RD token (encrypted), search history, a download log,
-  a blacklist, prefs — one sqlite file in `~/.torrent_tool`.
+  a blacklist, prefs — one sqlite file in `~/.odyssey`.
 - **`x` hides a result forever** — the blacklist. torlock's "verified 6000
   seeders" uploads go straight to hell where they belong.
 - **full CLI** — every engine is reachable from a shell script too.
@@ -58,14 +59,14 @@ you need a Real-Debrid account — it's the whole point. grab an API token at
 <https://real-debrid.com/apitoken>, then:
 
 ```bash
-python torrent_tool.py token <token>     # or press t inside the TUI
+python odyssey.py token <token>     # or press t inside the TUI
 ```
 
 ## usage
 
 ```bash
-python torrent_tool.py        # TUI
-python torrent_tool.py ui     # same thing, but louder
+python odyssey.py        # TUI
+python odyssey.py ui     # same thing, but louder
 ```
 
 ### keys
@@ -90,16 +91,16 @@ search syntax: `min:N` hides anything under N seeders.
 ### CLI (same engine, scriptable)
 
 ```bash
-python torrent_tool.py search "ubuntu 24.04" --sort smart --min-seeds 5 -n 10
-python torrent_tool.py search "frieren" --cached                # only ⚡ instant
-python torrent_tool.py search "frieren" --download 0            # straight to RD
-python torrent_tool.py download "magnet:?xt=..."                # direct magnet
-python torrent_tool.py status                                   # account/traffic
-python torrent_tool.py rd --delete 2                            # RD cloud mgmt
-python torrent_tool.py history            # --clear to nuke it
-python torrent_tool.py downloads          # what you grabbed recently
-python torrent_tool.py blacklist --wipe   # let the spammers back in. your call.
-python torrent_tool.py prefs --sort smart --dl-dir "D:\videos"
+python odyssey.py search "ubuntu 24.04" --sort smart --min-seeds 5 -n 10
+python odyssey.py search "frieren" --cached                # only ⚡ instant
+python odyssey.py search "frieren" --download 0            # straight to RD
+python odyssey.py download "magnet:?xt=..."                # direct magnet
+python odyssey.py status                                   # account/traffic
+python odyssey.py rd --delete 2                            # RD cloud mgmt
+python odyssey.py history            # --clear to nuke it
+python odyssey.py downloads          # what you grabbed recently
+python odyssey.py blacklist --wipe   # let the spammers back in. your call.
+python odyssey.py prefs --sort smart --dl-dir "D:\videos"
 ```
 
 ## quirks you'll bump into
@@ -112,7 +113,7 @@ python torrent_tool.py prefs --sort smart --dl-dir "D:\videos"
 - **RD links expire.** if a download dies mid-flight with a 403, re-run it. the
   tool refuses to save the 403 error page as your movie these days (that used to
   be a bug).
-- downloads go to `~/Downloads/TorrentTool/` by default. `prefs --dl-dir` moves it.
+- downloads go to `~/Downloads/Odyssey/` by default. `prefs --dl-dir` moves it.
 
 ### vs. the alternatives
 
@@ -126,7 +127,7 @@ this tool is: search + debrid in one terminal screen.
 
 ## files & privacy
 
-- everything lives in `~/.torrent_tool/settings.db` — encrypted token, history,
+- everything lives in `~/.odyssey/settings.db` — encrypted token, history,
   download log, blacklist, ⚡ cache, prefs. it sits *outside* the repo on purpose
   so your token never ends up on GitHub.
 - your IP talks to the trackers (search) and real-debrid (everything heavy).

@@ -7,7 +7,7 @@ Set Height 700
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 60ms
 
-Launch python torrent_tool.py
+Launch python odyssey.py
 
 Sleep 2s
 Type "frieren 1080p"

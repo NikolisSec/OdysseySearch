@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Torrent Tool - TUI + CLI torrent search + Real-Debrid downloader"""
+"""Odyssey Searcher - TUI + CLI torrent search + Real-Debrid downloader"""
 import os, sys, sqlite3, json, re, hashlib, base64, urllib.parse
 import requests, time, shutil, argparse, threading, math
 from pathlib import Path
@@ -7,9 +7,13 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-APP_DIR = Path.home() / ".torrent_tool"; APP_DIR.mkdir(exist_ok=True)
+_OLD_APP_DIR = Path.home() / ".torrent_tool"
+APP_DIR = Path.home() / ".odyssey"
+if not APP_DIR.exists() and _OLD_APP_DIR.exists():  # one-time rename in
+    shutil.move(str(_OLD_APP_DIR), str(APP_DIR))
+APP_DIR.mkdir(exist_ok=True)
 DB_PATH = APP_DIR / "settings.db"
-DL_DIR  = Path.home() / "Downloads" / "TorrentTool"; DL_DIR.mkdir(exist_ok=True)
+DL_DIR  = Path.home() / "Downloads" / "Odyssey"; DL_DIR.mkdir(exist_ok=True)
 SALT_FILE = APP_DIR / ".salt"; KEY_FILE = APP_DIR / ".key"
 HEADERS = {"User-Agent": "Mozilla/5.0 Gecko Firefox/128.0"}
 TIMEOUT = 25
@@ -24,7 +28,7 @@ def _dk():
 class DB:
     """One hidden sqlite database for everything local: config (encrypted secrets),
     search history, a downloads log, a blacklist, and a tiny TTL cache.
-    Lives in ~/.torrent_tool so it never leaks into the repo."""
+    Lives in ~/.odyssey so it never leaks into the repo."""
     def __init__(self):
         self._lock = threading.Lock()
         self.c = sqlite3.connect(str(DB_PATH), check_same_thread=False)
@@ -459,7 +463,7 @@ def rd_request(method, path, data=None):
     """Call the Real-Debrid API. Never raises: returns {} for empty bodies (204),
     or {"error": ...} on HTTP/network/JSON failures."""
     token = db.get("rd_api_token")
-    if not token: return {"error": "RD token not configured. Run: torrent_tool.py token <your-token>"}
+    if not token: return {"error": "RD token not configured. Run: odyssey.py token <your-token>"}
     h = {"Authorization": f"Bearer {token}"}
     u = f"https://api.real-debrid.com/rest/1.0{path}"
     try:
@@ -644,14 +648,14 @@ def download_file(url, fn, cb=None):
 # ── CLI ──
 def cmd_search(args):
     if not args.query:
-        print("Usage: torrent_tool.py search <query> [--sort smart|seeds|size|name] [--min-seeds N] [--cached]"); return
+        print("Usage: odyssey.py search <query> [--sort smart|seeds|size|name] [--min-seeds N] [--cached]"); return
     query,ms=parse_query(args.query)
     min_seeds=args.min_seeds or ms
     print(f"Searching for: {query}")
     results,counts=search_all(query)
     stamp_cached(results)  # ⚡ instant on RD?
     if args.cached and not db.get("rd_api_token"):
-        print("(cached filter needs an RD token: torrent_tool.py token <token>)")
+        print("(cached filter needs an RD token: odyssey.py token <token>)")
     results=rank_filter(results,query,sort=args.sort,min_seeds=min_seeds,cached=args.cached)
     if not results: print("No results."); return
     srcs=" | ".join(f"{k}: {v}" for k,v in counts.items())
@@ -670,7 +674,7 @@ def cmd_search(args):
 def cmd_download_from_result(r):
     token=db.get("rd_api_token")
     if not token:
-        print("Error: RD token not set. Run: torrent_tool.py token <your-token>")
+        print("Error: RD token not set. Run: odyssey.py token <your-token>")
         if r.get('mag'): print(f"Magnet: {r['mag']}")
         return
     if not r.get('mag') and r.get('web'):
@@ -691,7 +695,7 @@ def cmd_download_from_result(r):
 
 def cmd_download(args):
     if not args.url:
-        print("Usage: torrent_tool.py download <magnet-link>"); return
+        print("Usage: odyssey.py download <magnet-link>"); return
     print(f"Adding to RD...")
     tid,err=rd_add_magnet(args.url)
     if not tid: print(f"Error: {err}"); return
@@ -718,7 +722,7 @@ def cmd_download(args):
 
 def cmd_token(args):
     if not args.token:
-        print("Usage: torrent_tool.py token <api-token>")
+        print("Usage: odyssey.py token <api-token>")
         current=db.get("rd_api_token")
         if current: print(f"Current token: {current[:12]}...{current[-4:]}")
         return
@@ -890,7 +894,7 @@ if TUI_OK:
             self.app.call_from_thread(self._fill, tor if isinstance(tor, list) else [])
 
     HELP_TEXT = """\
-[bold #7ee787]⚡ TORRENT TOOL[/]  [#8b949e]— keyboard shortcuts[/]
+[bold #7ee787]⚡ ODYSSEY SEARCHER[/]  [#8b949e]— keyboard shortcuts[/]
 
 [bold #79c0ff]SEARCH[/]
   [#58d6eb]/[/]          focus search box
@@ -935,8 +939,8 @@ if TUI_OK:
         def action_cancel(self): self.dismiss(None)
 
     class TorrentApp(App):
-        """⚡ Torrent Tool — interactive terminal UI."""
-        TITLE = "Torrent Tool"
+        """⚡ Odyssey Searcher — interactive terminal UI."""
+        TITLE = "Odyssey Searcher"
         CSS = """
         Screen { background: #0d1117; }
         #topbar { height: 3; background: #161b22; border-bottom: solid #30363d; padding: 0 2; }
@@ -992,7 +996,7 @@ if TUI_OK:
 
         def compose(self) -> ComposeResult:
             with Horizontal(id="topbar"):
-                yield Static("[bold #7ee787]⚡ TORRENT TOOL[/]  [#8b949e]search · cache · download[/]", id="app-title")
+                yield Static("[bold #7ee787]⚡ ODYSSEY SEARCHER[/]  [#8b949e]search · cache · download[/]", id="app-title")
                 yield Static("[#8b949e]…[/]", id="rd-status")
             yield Input(placeholder="🔍  Search 8 engines — SolidTorrents · TPB · 1337x · TorrentsCSV · Nyaa · BitSearch · Torlock · Lime", id="search")
             yield DataTable(id="results", cursor_type="row", zebra_stripes=True)
@@ -1111,7 +1115,7 @@ if TUI_OK:
             self.marked.discard(rid)
             self.results = [x for x in self.results if x.get("_id") != rid]
             self._apply_view()
-            self.notify(f"⊘ hidden: {tr(r['n'], 40)} — undo: torrent_tool.py blacklist --wipe", timeout=5)
+            self.notify(f"⊘ hidden: {tr(r['n'], 40)} — undo: odyssey.py blacklist --wipe", timeout=5)
 
         def action_filter_src(self):
             srcs = sorted({p for r in self.results for p in r["src"].split("+")})
@@ -1373,14 +1377,14 @@ def cmd_blacklist(args):
     for ih, reason, ts in rows:
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts))
         print(f"  {ih[:24]:<26} {reason:<8} {when}")
-    print(f"\n{len(rows)} hidden. Undo everything: torrent_tool.py blacklist --wipe")
+    print(f"\n{len(rows)} hidden. Undo everything: odyssey.py blacklist --wipe")
 
 def cmd_prefs(args):
     if args.sort: pref_set("sort", args.sort); print(f"default sort → {args.sort}")
     if args.dl_dir: pref_set("dl_dir", str(Path(args.dl_dir))); print(f"download dir → {args.dl_dir}")
     if args.show or not (args.sort or args.dl_dir):
         print(f"sort:    {pref_get('sort','smart')}")
-        print(f"dl_dir:  {pref_get('dl_dir', str(Path.home()/'Downloads'/'TorrentTool'))}")
+        print(f"dl_dir:  {pref_get('dl_dir', str(Path.home()/'Downloads'/'Odyssey'))}")
 
 def cmd_dl_history(args):
     rows = dl_history(args.limit)
@@ -1396,7 +1400,7 @@ def main():
     try:  # never crash on emoji when stdout is piped through a legacy codepage
         sys.stdout.reconfigure(errors="replace"); sys.stderr.reconfigure(errors="replace")
     except Exception: pass
-    parser=argparse.ArgumentParser(description="Torrent Tool - Search + Real-Debrid (run with no arguments for the TUI)")
+    parser=argparse.ArgumentParser(description="Odyssey Searcher - Search + Real-Debrid (run with no arguments for the TUI)")
     sub=parser.add_subparsers(dest="cmd")
 
     sub.add_parser("ui",help="Launch the interactive TUI (default)")
