@@ -17,6 +17,8 @@ download through **Real-Debrid**, all inside a fast terminal UI.
 - **Real-Debrid pipeline** — magnet → cloud cache → unrestricted links → download with progress
 - **⚡ Instant badge** — results already sitting in RD's cache are flagged before you click; `c` flips to *cached-only*
 - **Multi-select queue** — mark with `Space`, press `d`, walk away
+- **Hidden local DB** — your RD token (encrypted), search history, a downloads log,
+  a "hide this result" blacklist, and preferences all live in one sqlite DB in `~/.torrent_tool`
 - **Search history**, live sort/filter, keybinding help — and a full **CLI** for scripting
 - **Encrypted config** — your RD token is stored Fernet-encrypted, keyed to your machine
 
@@ -47,6 +49,7 @@ python torrent_tool.py ui     # same, explicitly
 | `f` | filter by source |
 | `c` | toggle ⚡ cached-only (instant on RD) |
 | `C` | clear all filters |
+| `x` | hide this result (persisted to the local db) |
 | `m` | copy magnet |
 | `t` / `r` / `s` | RD token / cloud manager / refresh |
 | `?` | help · `q` quit |
@@ -62,6 +65,10 @@ python torrent_tool.py search "frieren" --download 0      # send result #0 to RD
 python torrent_tool.py download "magnet:?xt=..."          # direct magnet
 python torrent_tool.py status                             # account/traffic info
 python torrent_tool.py rd --delete 2                      # manage RD cloud
+python torrent_tool.py history                            # search history (--clear)
+python torrent_tool.py downloads                          # what you've grabbed lately
+python torrent_tool.py blacklist --wipe                   # unhide everything
+python torrent_tool.py prefs --sort smart --dl-dir "D:\videos"   # persistent prefs
 ```
 
 ## Demo GIF
@@ -75,8 +82,11 @@ vhs demo.tape     # writes docs/demo.gif
 
 ## Files & privacy
 
-- Settings + token: `~/.torrent_tool/settings.db` (token is encrypted at rest)
-- Downloads: `~/Downloads/TorrentTool/`
+- Settings + token: `~/.torrent_tool/settings.db` — one hidden sqlite DB holding the
+  encrypted RD token, search history, a downloads log, the blacklist, a TTL cache for
+  ⚡ checks, and prefs. It lives outside the repo on purpose, so nothing sensitive
+  ever gets pushed to GitHub.
+- Downloads: `~/Downloads/TorrentTool/` (change with `prefs --dl-dir PATH`)
 
 ## Disclaimer
 

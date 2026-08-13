@@ -22,10 +22,44 @@ def _dk():
     key = base64.urlsafe_b64encode(kdf.derive(mid)); KEY_FILE.write_bytes(key); return key
 
 class DB:
+    """One hidden sqlite database for everything local: config (encrypted secrets),
+    search history, a downloads log, a blacklist, and a tiny TTL cache.
+    Lives in ~/.torrent_tool so it never leaks into the repo."""
     def __init__(self):
         self._lock = threading.Lock()
-        self.c = sqlite3.connect(str(DB_PATH), check_same_thread=False); self.c.execute("PRAGMA journal_mode=WAL")
-        self.c.execute("CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT, enc INTEGER DEFAULT 0)"); self.c.commit()
+        self.c = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+        self.c.execute("PRAGMA journal_mode=WAL")
+        self.c.execute("CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT, enc INTEGER DEFAULT 0)")
+        self.c.execute("CREATE TABLE IF NOT EXISTS history (q TEXT PRIMARY KEY, ts REAL)")
+        self.c.execute("CREATE TABLE IF NOT EXISTS downloads (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, title TEXT, path TEXT, size INTEGER, status TEXT)")
+        self.c.execute("CREATE TABLE IF NOT EXISTS blacklist (ih TEXT PRIMARY KEY, reason TEXT, ts REAL)")
+        self.c.execute("CREATE TABLE IF NOT EXISTS cache (k TEXT PRIMARY KEY, v TEXT, expires REAL)")
+        self.c.commit()
+        self._migrate_history()
+        self._rearm_secrets()
+    def _rearm_secrets(self):
+        # if a plaintext token survived from before we added encryption, lock it up.
+        # one-time, invisible, and the whole point of a hidden db is not leaking it.
+        try:
+            r = self.c.execute("SELECT v,enc FROM config WHERE k='rd_api_token'").fetchone()
+            if r and not r[1]:
+                self.c.execute("INSERT OR REPLACE INTO config(k,v,enc) VALUES(?,?,?)",
+                               ("rd_api_token", Fernet(_dk()).encrypt(r[0].encode()).decode(), 1))
+                self.c.commit()
+        except Exception:
+            pass
+    def _migrate_history(self):
+        # history used to be a JSON blob in config; fold it into the real table once
+        try:
+            raw = self.c.execute("SELECT v FROM config WHERE k='history'").fetchone()
+            if raw:
+                now = time.time()
+                for i, q in enumerate(json.loads(raw[0])):
+                    self.c.execute("INSERT OR REPLACE INTO history(q,ts) VALUES(?,?)", (q, now - i))
+                self.c.execute("DELETE FROM config WHERE k='history'")
+                self.c.commit()
+        except Exception:
+            pass
     def get(self,k,d=None):
         with self._lock: r=self.c.execute("SELECT v,enc FROM config WHERE k=?",(k,)).fetchone()
         return Fernet(_dk()).decrypt(r[0].encode()).decode() if (r and r[1]) else (r[0] if r else d)
@@ -33,19 +67,73 @@ class DB:
         with self._lock: self.c.execute("INSERT OR REPLACE INTO config(k,v,enc) VALUES(?,?,?)",(k,Fernet(_dk()).encrypt(v.encode()).decode() if e else v,1 if e else 0)); self.c.commit()
     def rmv(self,k):
         with self._lock: self.c.execute("DELETE FROM config WHERE k=?",(k,)); self.c.commit()
+    def query(self,sql,params=()):
+        with self._lock: return self.c.execute(sql,params).fetchall()
+    def execute(self,sql,params=()):
+        with self._lock: self.c.execute(sql,params); self.c.commit()
 
 db = DB()
 
 def hist_get():
-    """Search history, newest first (max 50, stored unencrypted)."""
-    try: return json.loads(db.get("history","[]"))
+    """Search history, newest first (max 50)."""
+    try: return [r[0] for r in db.query("SELECT q FROM history ORDER BY ts DESC LIMIT 50")]
     except Exception: return []
 
 def hist_add(q):
-    h=hist_get()
-    if q in h: h.remove(q)
-    h.insert(0,q)
-    db.set("history", json.dumps(h[:50]), e=False)
+    if not q: return
+    try: db.execute("INSERT OR REPLACE INTO history(q,ts) VALUES(?,?)", (q, time.time()))
+    except Exception: pass
+
+def hist_clear():
+    try: db.execute("DELETE FROM history")
+    except Exception: pass
+
+# ── local db extras: blacklist / prefs / downloads log / ttl cache ──
+def blk_add(ih, reason="manual"):
+    try: db.execute("INSERT OR REPLACE INTO blacklist(ih,reason,ts) VALUES(?,?,?)", (ih, reason, time.time()))
+    except Exception: pass
+def blk_get():
+    try: return {r[0] for r in db.query("SELECT ih FROM blacklist")}
+    except Exception: return set()
+def blk_list():
+    try: return db.query("SELECT ih,reason,ts FROM blacklist ORDER BY ts DESC")
+    except Exception: return []
+def blk_wipe():
+    try: db.execute("DELETE FROM blacklist")
+    except Exception: pass
+
+def pref_get(k, d=None):
+    try: return db.get("pref:"+k, d)
+    except Exception: return d
+def pref_set(k, v):
+    try: db.set("pref:"+k, str(v), e=False)
+    except Exception: pass
+def apply_prefs():
+    """Re-read persistent prefs into module globals (call once at startup)."""
+    global DL_DIR
+    d = pref_get("dl_dir")
+    if d:
+        DL_DIR = Path(d); DL_DIR.mkdir(exist_ok=True)
+
+def dl_log(title, path=None, size=None, status="ok"):
+    try: db.execute("INSERT INTO downloads(ts,title,path,size,status) VALUES(?,?,?,?,?)",
+                    (time.time(), str(title)[:300], path, size, status))
+    except Exception: pass
+def dl_history(limit=20):
+    try: return db.query("SELECT ts,title,path,size,status FROM downloads ORDER BY id DESC LIMIT ?", (max(1,limit),))
+    except Exception: return []
+
+def cache_get(k):
+    try:
+        r = db.query("SELECT v,expires FROM cache WHERE k=?", (k,))
+        if not r: return None
+        if r[0][1] and time.time() > r[0][1]:
+            db.execute("DELETE FROM cache WHERE k=?", (k,)); return None
+        return r[0][0]
+    except Exception: return None
+def cache_set(k, v, ttl=43200):  # 12h default: what's cached today might change tomorrow
+    try: db.execute("INSERT OR REPLACE INTO cache(k,v,expires) VALUES(?,?,?)", (k, v, time.time()+ttl))
+    except Exception: pass
 
 def fs(b):
     for u in ['B','KB','MB','GB','TB']:
@@ -312,10 +400,12 @@ def smart_score(r, qtokens, qfull):
 JUNK_RE = re.compile(r'(\[real\]|\bfull version\b|\bhigh-definition\b|\blatest top release\b|\bdirect download\b)', re.I)
 
 def rank_filter(results, query='', sort='smart', min_seeds=0, src=None, cached=None):
-    """Filter (bait titles / min seeders / source / cached-only) and sort
+    """Filter (bait titles / blacklisted / min seeders / source / cached-only) and sort
     (smart|seeds|size|name) a result list."""
+    blk = blk_get()
     out=[r for r in results if r['s']>=min_seeds and (not src or src in r['src'])
-         and not JUNK_RE.search(r['n']) and (not cached or r.get('rd_cached'))]
+         and not JUNK_RE.search(r['n']) and r.get('_id') not in blk
+         and (not cached or r.get('rd_cached'))]
     if sort=='seeds': out.sort(key=lambda x: x['s'], reverse=True)
     elif sort=='size': out.sort(key=lambda x: x['szr'], reverse=True)
     elif sort=='name': out.sort(key=lambda x: x['n'].lower())
@@ -457,7 +547,8 @@ def rd_instant(hashes):
 
 def stamp_cached(results, maxn=40):
     """Best-effort: mark rows that are instant-available on RD with rd_cached=True.
-    Checks the top maxn rows (the ones worth clicking), batches 50 hashes/call.
+    Checks the top maxn rows (the ones worth clicking), batches 50 hashes/call,
+    and remembers each hash in the local cache for 12h so repeat searches are free.
     Never raises — if RD is missing or grumpy, the ⚡ badges just don't show up."""
     token = db.get("rd_api_token")
     if not token or not results: return
@@ -467,13 +558,17 @@ def stamp_cached(results, maxn=40):
         if m and r.get("_id"): want[r["_id"]] = m.group(1).lower()
     if not want: return
     rowmap = {r.get("_id"): r for r in results if r.get("_id")}
-    cached = set()
-    hs = list(want.values())
-    for i in range(0, len(hs), 50):
-        cached |= rd_instant(hs[i:i+50])
+    miss = []
     for rid, hsh in want.items():
-        if hsh in cached and rid in rowmap:
-            rowmap[rid]["rd_cached"] = True
+        c = cache_get("inst:" + hsh)
+        if c == "1": rowmap[rid]["rd_cached"] = True
+        elif c is None: miss.append((rid, hsh))   # "0" = known-not-cached, skip
+    for i in range(0, len(miss), 50):
+        got = rd_instant([h for _, h in miss[i:i+50]])
+        for rid, hsh in miss[i:i+50]:
+            hit = hsh in got
+            cache_set("inst:" + hsh, "1" if hit else "0", ttl=43200)
+            if hit and rid in rowmap: rowmap[rid]["rd_cached"] = True
 
 def rd_list():
     tor=rd_request("GET","/torrents")
@@ -516,6 +611,7 @@ def download_file(url, fn, cb=None):
             if fp.exists() and total and fp.stat().st_size==total:
                 if cb: cb(total,total,0)
                 else: print(f"Already complete: {fn}")
+                dl_log(fn, str(fp), total, "ok")
                 return str(fp)
             n=1
             while fp.exists():  # same name, different file -> don't clobber
@@ -533,6 +629,7 @@ def download_file(url, fn, cb=None):
                         sys.stderr.write(f"\r[{bar}] {pct:.0f}%  {dl/1048576:.0f}/{total/1048576:.0f}MB  {speed:.1f}MB/s  "); sys.stderr.flush()
             if total and dl<total: raise IOError(f"incomplete download ({dl}/{total} bytes)")
             tmp.replace(fp)  # atomic: no half-downloaded files cosplaying as complete ones
+            dl_log(fp.name, str(fp), total, "ok")
             if cb: return str(fp)
             print(f"\nSaved: {fp}")
             return str(fp)
@@ -616,6 +713,7 @@ def cmd_download(args):
             try:
                 download_file(lk['u'],lk['f'])
             except Exception as e:
+                dl_log(lk['f'], None, None, f"error: {str(e)[:120]}")
                 print(f"Failed: {lk['f']} ({e})")
 
 def cmd_token(args):
@@ -809,6 +907,7 @@ if TUI_OK:
   [#58d6eb]f[/]          filter by source
   [#58d6eb]c[/]          toggle ⚡ cached-only (instant on RD)
   [#58d6eb]C[/]          clear all filters
+  [#58d6eb]x[/]          hide this result (persisted)
   [#58d6eb]m[/]          copy magnet link
   [#8b949e]⚡ in the table = already in RD's cache → instant download[/]
 
@@ -865,6 +964,7 @@ if TUI_OK:
             Binding("o", "sort", "Sort"),
             Binding("f", "filter_src", "Filter"),
             Binding("c", "toggle_cached", "Cached"),
+            Binding("x", "hide", "Hide"),
             Binding("t", "token", "Token"),
             Binding("r", "rd", "RD cloud"),
             Binding("m", "copy_magnet", "Copy magnet", show=False),
@@ -880,7 +980,7 @@ if TUI_OK:
             self.results = []      # all deduped results from last search
             self.view = []         # filtered/sorted rows currently shown
             self.query = ""
-            self.sort_mode = "smart"
+            self.sort_mode = "smart" if pref_get("sort", "smart") not in SORT_MODES else pref_get("sort", "smart")
             self.src_filter = None
             self.min_seeds = 0
             self.cached_only = False
@@ -1000,7 +1100,18 @@ if TUI_OK:
 
         def action_sort(self):
             self.sort_mode = SORT_MODES[(SORT_MODES.index(self.sort_mode) + 1) % len(SORT_MODES)]
+            pref_set("sort", self.sort_mode)  # remember your favorite
             self._apply_view()
+
+        def action_hide(self):
+            idx, r = self._current()
+            if r is None: return
+            rid = r.get("_id") or r["n"]
+            blk_add(rid, "manual")
+            self.marked.discard(rid)
+            self.results = [x for x in self.results if x.get("_id") != rid]
+            self._apply_view()
+            self.notify(f"⊘ hidden: {tr(r['n'], 40)} — undo: torrent_tool.py blacklist --wipe", timeout=5)
 
         def action_filter_src(self):
             srcs = sorted({p for r in self.results for p in r["src"].split("+")})
@@ -1176,6 +1287,7 @@ if TUI_OK:
                     saved += 1
                     self.call_from_thread(self.notify, f"✓ Saved {Path(fp).name}", timeout=4)
                 except Exception as e:
+                    dl_log(lk["f"], None, None, f"error: {str(e)[:120]}")
                     self.call_from_thread(self.notify, f"✗ Failed: {tr(lk['f'], 40)} ({e})", severity="error")
             self.call_from_thread(self._hide_pbar)
             self.call_from_thread(self._after_downloads, saved, n)
@@ -1248,6 +1360,37 @@ def cmd_ui():
         return
     TorrentApp().run()
 
+def cmd_history(args):
+    if args.clear: hist_clear(); print("History cleared."); return
+    h = hist_get()
+    if not h: print("No history yet — run a search."); return
+    for i, q in enumerate(h, 1): print(f"{i:>3}. {q}")
+
+def cmd_blacklist(args):
+    if args.wipe: blk_wipe(); print("Blacklist cleared — they're back on the menu."); return
+    rows = blk_list()
+    if not rows: print("Blacklist is empty — nothing has hurt you yet."); return
+    for ih, reason, ts in rows:
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts))
+        print(f"  {ih[:24]:<26} {reason:<8} {when}")
+    print(f"\n{len(rows)} hidden. Undo everything: torrent_tool.py blacklist --wipe")
+
+def cmd_prefs(args):
+    if args.sort: pref_set("sort", args.sort); print(f"default sort → {args.sort}")
+    if args.dl_dir: pref_set("dl_dir", str(Path(args.dl_dir))); print(f"download dir → {args.dl_dir}")
+    if args.show or not (args.sort or args.dl_dir):
+        print(f"sort:    {pref_get('sort','smart')}")
+        print(f"dl_dir:  {pref_get('dl_dir', str(Path.home()/'Downloads'/'TorrentTool'))}")
+
+def cmd_dl_history(args):
+    rows = dl_history(args.limit)
+    if not rows: print("No downloads logged yet."); return
+    for ts, title, path, size, status in rows:
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts))
+        mark = "✓" if status == "ok" else "✗"
+        sz = fs(size) if size else "?"
+        print(f"{mark} {when}  {sz:>8}  {tr(title, 70)}  {status}")
+
 # ── Main ──
 def main():
     try:  # never crash on emoji when stdout is piped through a legacy codepage
@@ -1279,7 +1422,23 @@ def main():
     rd=sub.add_parser("rd",help="Manage RD torrents")
     rd.add_argument("--delete",type=int,metavar="IDX",help="Delete cached torrent by index")
 
+    hist=sub.add_parser("history",help="Show search history (local db)")
+    hist.add_argument("--clear",action="store_true",help="Wipe history")
+
+    bl=sub.add_parser("blacklist",help="Hidden results (local db)")
+    bl.add_argument("--wipe",action="store_true",help="Unhide everything")
+
+    pr=sub.add_parser("prefs",help="Persistent preferences")
+    pr.add_argument("--sort",choices=["smart","seeds","size","name"],help="Default sort in the TUI")
+    pr.add_argument("--dl-dir",metavar="PATH",help="Download folder")
+    pr.add_argument("--show",action="store_true",help="Show current prefs")
+
+    dl2=sub.add_parser("downloads",help="Local download history")
+    dl2.add_argument("-n","--limit",type=int,default=15,help="Rows")
+
     args=parser.parse_args()
+
+    apply_prefs()  # pick up dl_dir & friends from the local db
 
     if args.cmd=="ui": cmd_ui()
     elif args.cmd=="search": cmd_search(args)
@@ -1287,6 +1446,10 @@ def main():
     elif args.cmd=="token": cmd_token(args)
     elif args.cmd=="status": cmd_status(args)
     elif args.cmd=="rd": cmd_rd(args)
+    elif args.cmd=="history": cmd_history(args)
+    elif args.cmd=="blacklist": cmd_blacklist(args)
+    elif args.cmd=="prefs": cmd_prefs(args)
+    elif args.cmd=="downloads": cmd_dl_history(args)
     elif TUI_OK: cmd_ui()
     else:
         print("Tip: pip install textual  →  then run with no arguments for the TUI.\n")
