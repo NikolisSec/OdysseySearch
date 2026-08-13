@@ -1,9 +1,9 @@
 # ⚡ Odyssey Searcher
 
 **v1.0 Beta** — feature-complete enough to be useful, young enough to make
-excuses. the story so far lives in [CHANGELOG.md](CHANGELOG.md).
+excuses. no changelog yet — it's brand new. the git history is the changelog.
 
-Search 8 public trackers at once, dedupe the noise, and push whatever you pick
+Search 10 open trackers at once, dedupe the noise, and push whatever you pick
 through **Real-Debrid** — from a terminal that doesn't look like 1995.
 
 ![screenshot](docs/screenshot.svg)
@@ -14,7 +14,7 @@ through **Real-Debrid** — from a terminal that doesn't look like 1995.
 
 ## what it actually does
 
-you type a search. it hits 8 trackers in parallel, merges the same torrent
+you type a search. it hits 10 trackers in parallel, merges the same torrent
 across sites into one row, drops the SEO bait, and ranks by relevance + seeders.
 then the Real-Debrid part takes over:
 
@@ -29,9 +29,13 @@ then the Real-Debrid part takes over:
 
 ## features, in no particular order
 
-- **8 engines in parallel** — SolidTorrents, TPB (the real API, not a scraper),
-  1337x, TorrentsCSV, Nyaa, BitSearch, Torlock, LimeTorrents. the status bar
-  shows per-engine counts so you can see which tracker is having a mood today.
+- **10 engines in parallel** — SolidTorrents, TPB (the real API, not a scraper),
+  1337x, TorrentsCSV, Nyaa, BitSearch, BitMusic (music-only), Torlock,
+  LimeTorrents, Archive.org (the legal one). the status bar shows per-engine
+  counts so you can see which tracker is having a mood today.
+- **beat packs & drum kits** — a drum kit, boom bap pack or sample kit gets a
+  🥁 badge. search "boom bap kit" and BitMusic + Archive.org actually deliver,
+  legally in Archive's case.
 - **infohash dedup** — the same release on three sites shows up as one row with
   `TPB+1337x` as the source. keeps the highest-seeded copy.
 - **smart ranking** — relevance first. `ubuntu 24.04` gives you actual ISOs, not
@@ -39,7 +43,7 @@ then the Real-Debrid part takes over:
   the way.
 - **bait filter** — `[REAL]`, `Full Version`, `Direct Download!!1` and friends
   get dropped before you ever see them. (yes, it's personal.)
-- **category badges** — 📺 🎬 🎮 🎵 📚 💾 🌸 guessed from the name. it's wrong
+- **category badges** — 📺 🎬 🎮 🎵 📚 💾 🌸 🥁 guessed from the name. it's wrong
   sometimes. it's fine.
 - **Real-Debrid pipeline** — magnet → RD cache → unrestricted links → download.
   your ISP sees exactly one https connection to debrid, which is honestly the point.
@@ -117,6 +121,8 @@ python odyssey.py prefs --sort smart --dl-dir "D:\videos"
   tool refuses to save the 403 error page as your movie these days (that used to
   be a bug).
 - downloads go to `~/Downloads/Odyssey/` by default. `prefs --dl-dir` moves it.
+- **archive.org results report 0 seeders** — it's a library, not a swarm. they
+  surface in smart sort by relevance, and get filtered out if you use `min:N`.
 
 ### vs. the alternatives
 
@@ -141,11 +147,7 @@ this tool is: search + debrid in one terminal screen.
 as of v1.0 Beta, `docs/screenshot.svg` and `docs/help.svg` are real captures,
 not mockups. the screenshot is a Mr. Robot search gone very well.
 
-want an animated one? install [vhs](https://github.com/charmbracelet/vhs) and:
-
-```bash
-vhs demo.tape     # → docs/demo.gif
-```
+want an animated one? that's a todo item. it's on the list. it's fine.
 
 ## roadmap (stuff i keep meaning to do)
 

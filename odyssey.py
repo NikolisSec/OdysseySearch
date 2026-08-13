@@ -156,7 +156,48 @@ TRACKERS = ("&tr=udp://tracker.opentrackr.org:1337/announce"
             "&tr=udp://tracker.torrent.eu.org:451/announce")
 def magnet_for(ih): return f"magnet:?xt=urn:btih:{ih}{TRACKERS}" if ih else ""
 
+def btih_from_torrent(data):
+    """Infohash = SHA1 of the bencoded 'info' dict inside a .torrent file."""
+    i=data.find(b"4:info")
+    if i<0: return None
+    i+=6; pos=i
+    def _skip(p):
+        e=data.find(b":",p)
+        if e<0: return None
+        return e+1+int(data[p:e])
+    stack=[]
+    while pos<len(data):
+        c=data[pos:pos+1]
+        if c in (b"d",b"l"):
+            stack.append(c); pos+=1
+        elif c==b"i":
+            e=data.find(b"e",pos)
+            if e<0: return None
+            pos=e+1
+        elif c==b"e":
+            stack.pop(); pos+=1
+            if not stack: return hashlib.sha1(data[i:pos]).hexdigest()
+        else:
+            n=_skip(pos)
+            if n is None: return None
+            pos=n
+    return None
+
+def fetch_archive_magnet(x):
+    """archive.org buries its magnet inside each item's own .torrent. dig it up."""
+    m=re.search(r'/details/([^/\s]+)', x.get('web','') or '')
+    if not m: return None
+    iid=m.group(1)
+    try:
+        resp=requests.get(f"https://archive.org/download/{iid}/{iid}_archive.torrent",
+                          headers=HEADERS, timeout=60)
+        if resp.status_code!=200: return None
+        btih=btih_from_torrent(resp.content)
+        return f"magnet:?xt=urn:btih:{btih}" if btih else None
+    except: return None
+
 CAT_RULES = [
+    ("🥁", re.compile(r'\b(drum\s?kit|drum\s?pack|drum\s?loop|drum\s?sample|drum\s?midi|boom\s?bap|one\s?shots?|sample\s?pack|sample\s?kit|midi\s?kit|melody\s?pack|vocal\s?pack|break\s?kit|trap\s?kit|beat\s?pack|wav\s?pack|ableton\s?pack|serum\s?pack|kontakt\s?kit|lo[\- ]?fi\s?kit)\b', re.I)),  # producers rise up
     ("🌸", re.compile(r'^\[(erai|subsplease|.*raws|.*subs)\]', re.I)),                      # weebs get their own badge. you're welcome.
     ("📺", re.compile(r'\bs\d{1,2}e\d{1,2}\b|\bseason\s*\d+\b|hdtv|\bcomplete\s+series\b', re.I)),
     ("🎬", re.compile(r'\b(1080p|2160p|720p|480p|blu[\- ]?ray|bdrip|web[\- ]?dl|webrip|dvdrip|hdrip|remux|x264|x265|hevc)\b', re.I)),
@@ -261,11 +302,12 @@ def search_nyaa(q,n=30):
     except: pass
     return r
 
-def search_bitsearch(q,n=30):
-    """BitSearch scrape (magnets inline; stats parsed from card text)."""
+def search_bitsearch(q,n=30,category=None,tag="BitSearch"):
+    """BitSearch scrape (magnets inline; stats parsed from card text).
+    category scopes to a section ('music') — that variant is its own engine."""
     r=[]
     try:
-        u=f"https://bitsearch.to/search?q={urllib.parse.quote(q)}&sort=seeders"
+        u=f"https://bitsearch.to/search?q={urllib.parse.quote(q)}&sort=seeders"+(f"&category={category}" if category else "")
         resp=requests.get(u,headers=HEADERS,timeout=TIMEOUT,allow_redirects=True)
         if resp.status_code!=200: return r
         import bs4
@@ -282,7 +324,7 @@ def search_bitsearch(q,n=30):
             szm=re.search(r'([\d.]+\s*[KMGT]i?B)',' '.join(txts))
             sz=szm.group(1) if szm else '?'
             r.append({'n':a.text.strip(),'s':stat('seeders'),'l':stat('leechers'),
-                      'sz':sz,'szr':parse_size(sz),'src':'BitSearch',
+                      'sz':sz,'szr':parse_size(sz),'src':tag,
                       'mag':me['href'] if me else '','web':base+a.get('href','')})
     except: pass
     return r
@@ -337,6 +379,28 @@ def search_lime(q,n=30):
     except: pass
     return r
 
+def search_archive(q,n=30):
+    """archive.org — the open one. every kind of music, drum kits, beat packs,
+    and it's all legal so your ISP can only shrug. magnets come from each item's
+    own .torrent (lazy, see fetch_archive_magnet)."""
+    r=[]
+    try:
+        fl="&fl[]=identifier&fl[]=title&fl[]=mediatype&fl[]=item_size&fl[]=downloads"
+        u=(f"https://archive.org/advancedsearch.php?q={urllib.parse.quote(f'({q}) AND mediatype:(audio)')}"
+           f"&rows={n}&sort[]=downloads+desc{fl}&output=json")
+        resp=requests.get(u,headers=HEADERS,timeout=TIMEOUT)
+        if resp.status_code!=200: return r
+        for d in resp.json().get('response',{}).get('docs',[]):
+            iid=d.get('identifier','')
+            if not iid: continue
+            sz=int(d.get('item_size',0) or 0)
+            r.append({'n':d.get('title',iid),'s':0,'l':0,
+                      'sz':fs(sz) if sz else '?','szr':sz,
+                      'src':'Archive','mag':'',
+                      'web':f'https://archive.org/details/{iid}'})
+    except: pass
+    return r
+
 # Engine registry — the gang's all here. order = display order of per-engine counts.
 ENGINES = [("SolidTorrents", search_solidtorrents),
            ("TPB",          search_tpb),
@@ -344,10 +408,14 @@ ENGINES = [("SolidTorrents", search_solidtorrents),
            ("TorrentsCSV",  search_torrentscsv),
            ("Nyaa",         search_nyaa),
            ("BitSearch",    search_bitsearch),
+           ("BitMusic",     lambda q, n=30: search_bitsearch(q, n, category="music", tag="BitMusic")),
            ("Torlock",      search_torlock),
-           ("Lime",         search_lime)]
+           ("Lime",         search_lime),
+           ("Archive",      search_archive)]
 # Engines whose results carry no magnet (fetched lazily from the details page).
-NO_MAGNET_ENGINES = {"1337x", "Torlock", "Lime"}
+NO_MAGNET_ENGINES = {"1337x", "Torlock", "Lime", "Archive"}
+# Engines needing a bespoke lazy-magnet fetcher (archive.org: btih from the item's .torrent).
+CUSTOM_MAGNET = {"Archive": fetch_archive_magnet}
 
 def dedupe_sort(all_r):
     best={}
@@ -411,7 +479,12 @@ def search_all(query):
     results_q=[]
     def _run(name,fn):
         res=fn(query)
-        if name in NO_MAGNET_ENGINES:
+        if name in CUSTOM_MAGNET:
+            for x in res[:6]:
+                if not x.get('mag'):
+                    try: x['mag']=CUSTOM_MAGNET[name](x) or ''
+                    except: pass
+        elif name in NO_MAGNET_ENGINES:
             s=requests.Session(); s.headers.update(HEADERS)
             for x in res[:6]:
                 if not x.get('mag') and x.get('web'):
@@ -957,7 +1030,7 @@ if TUI_OK:
             with Horizontal(id="topbar"):
                 yield Static("[bold #7ee787]⚡ ODYSSEY SEARCHER[/]  [#8b949e]search · cache · download[/]", id="app-title")
                 yield Static("[#8b949e]…[/]", id="rd-status")
-            yield Input(placeholder="🔍  Search 8 engines — SolidTorrents · TPB · 1337x · TorrentsCSV · Nyaa · BitSearch · Torlock · Lime", id="search")
+            yield Input(placeholder="🔍  Search 10 engines — SolidTorrents · TPB · 1337x · TorrentsCSV · Nyaa · BitSearch · BitMusic · Torlock · Lime · Archive", id="search")
             yield DataTable(id="results", cursor_type="row", zebra_stripes=True)
             with Horizontal(id="bottombar"):
                 yield Static("", id="status")
