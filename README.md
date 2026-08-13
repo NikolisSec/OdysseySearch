@@ -1,95 +1,157 @@
 # ⚡ Torrent Tool
 
-Search **8 public trackers** at once, dedupe by infohash, rank by relevance — then one-key
-download through **Real-Debrid**, all inside a fast terminal UI.
+Search 8 public trackers at once, dedupe the noise, and push whatever you pick
+through **Real-Debrid** — from a terminal that doesn't look like 1995.
 
 ![screenshot](docs/screenshot.svg)
 
-## Features
+> this started as a "fine, i'll write my own" project because i got tired of
+> opening five tracker tabs and copy-pasting magnets. then it got ideas.
 
-- **8 engines in parallel** — SolidTorrents · ThePirateBay (official API) · 1337x ·
-  TorrentsCSV · Nyaa · BitSearch · Torlock · LimeTorrents
-- **Smart ranking** — relevance-weighted results, so `ubuntu 24.04` shows Ubuntu ISOs,
-  not whatever spam has the most seeds
-- **Infohash dedup** — the same torrent found on 3 trackers is one row (`TPB+1337x`)
-- **Bait filter** — `[REAL]` / `Full Version` / `Direct Download` SEO traps are dropped automatically (yes, it's personal)
-- **Category badges** — 📺 TV · 🎬 movies · 🎮 games · 🎵 music · 📚 books · 💾 software · 🌸 anime
-- **Real-Debrid pipeline** — magnet → cloud cache → unrestricted links → download with progress
-- **⚡ Instant badge** — results already sitting in RD's cache are flagged before you click; `c` flips to *cached-only*
-- **Multi-select queue** — mark with `Space`, press `d`, walk away
-- **Hidden local DB** — your RD token (encrypted), search history, a downloads log,
-  a "hide this result" blacklist, and preferences all live in one sqlite DB in `~/.torrent_tool`
-- **Search history**, live sort/filter, keybinding help — and a full **CLI** for scripting
-- **Encrypted config** — your RD token is stored Fernet-encrypted, keyed to your machine
+## what it actually does
 
-## Install
+you type a search. it hits 8 trackers in parallel, merges the same torrent
+across sites into one row, drops the SEO bait, and ranks by relevance + seeders.
+then the Real-Debrid part takes over:
+
+1. **instant check** — it asks RD which results are already sitting in their
+   cache and marks them with a ⚡. cached = plays in seconds. no waiting.
+2. press `Enter` (or mark a few with `Space` and hit `d`) — it adds the magnet,
+   waits for it to be ready, and downloads with a progress bar.
+3. **cached-only mode** (`c`) hides everything that isn't instant. for people
+   with no patience. (hello.)
+
+![help](docs/help.svg)
+
+## features, in no particular order
+
+- **8 engines in parallel** — SolidTorrents, TPB (the real API, not a scraper),
+  1337x, TorrentsCSV, Nyaa, BitSearch, Torlock, LimeTorrents. the status bar
+  shows per-engine counts so you can see which tracker is having a mood today.
+- **infohash dedup** — the same release on three sites shows up as one row with
+  `TPB+1337x` as the source. keeps the highest-seeded copy.
+- **smart ranking** — relevance first. `ubuntu 24.04` gives you actual ISOs, not
+  "totally unrelated spam upload (9999 seeders)". those seed counts are lies, by
+  the way.
+- **bait filter** — `[REAL]`, `Full Version`, `Direct Download!!1` and friends
+  get dropped before you ever see them. (yes, it's personal.)
+- **category badges** — 📺 🎬 🎮 🎵 📚 💾 🌸 guessed from the name. it's wrong
+  sometimes. it's fine.
+- **Real-Debrid pipeline** — magnet → RD cache → unrestricted links → download.
+  your ISP sees exactly one https connection to debrid, which is honestly the point.
+- **⚡ instant badge** — results already in RD's cache are flagged before you
+  click, and `c` flips to cached-only. the feature i actually use the most.
+- **multi-select queue** — mark a handful, press `d`, walk away.
+- **hidden local db** — RD token (encrypted), search history, a download log,
+  a blacklist, prefs — one sqlite file in `~/.torrent_tool`.
+- **`x` hides a result forever** — the blacklist. torlock's "verified 6000
+  seeders" uploads go straight to hell where they belong.
+- **full CLI** — every engine is reachable from a shell script too.
+
+## install
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Get a Real-Debrid API token at <https://real-debrid.com/apitoken>, then either press
-`t` inside the TUI or run `python torrent_tool.py token <token>`.
-
-## Usage
+you need a Real-Debrid account — it's the whole point. grab an API token at
+<https://real-debrid.com/apitoken>, then:
 
 ```bash
-python torrent_tool.py        # launches the TUI
-python torrent_tool.py ui     # same, explicitly
+python torrent_tool.py token <token>     # or press t inside the TUI
 ```
 
-### Keys
+## usage
 
-| Key | Action |
+```bash
+python torrent_tool.py        # TUI
+python torrent_tool.py ui     # same thing, but louder
+```
+
+### keys
+
+| key | what it does |
 |---|---|
-| `/` | focus search (`↑`/`↓` = history) |
+| `/` | focus search (↑/↓ browsed your history) |
 | `Enter` | download this torrent |
-| `Space` | mark / unmark (multi-download) · `Esc` clears |
+| `Space` | mark / unmark · `Esc` clears marks |
 | `o` | sort: smart → seeds → size → name |
 | `f` | filter by source |
-| `c` | toggle ⚡ cached-only (instant on RD) |
+| `c` | toggle ⚡ cached-only |
 | `C` | clear all filters |
-| `x` | hide this result (persisted to the local db) |
-| `m` | copy magnet |
-| `t` / `r` / `s` | RD token / cloud manager / refresh |
+| `x` | hide this result (blacklist) |
+| `m` | copy the magnet |
+| `t` / `r` / `s` | token / RD cloud / refresh |
 | `?` | help · `q` quit |
 
-Search supports `min:N` — e.g. `frieren 1080p min:20` hides anything under 20 seeders.
+search syntax: `min:N` hides anything under N seeders.
+`frieren 1080p min:20` → only non-bait frieren at 1080p with 20+ seeders.
 
 ### CLI (same engine, scriptable)
 
 ```bash
 python torrent_tool.py search "ubuntu 24.04" --sort smart --min-seeds 5 -n 10
-python torrent_tool.py search "frieren" --cached --sort smart     # only ⚡ instant results
-python torrent_tool.py search "frieren" --download 0      # send result #0 to RD
-python torrent_tool.py download "magnet:?xt=..."          # direct magnet
-python torrent_tool.py status                             # account/traffic info
-python torrent_tool.py rd --delete 2                      # manage RD cloud
-python torrent_tool.py history                            # search history (--clear)
-python torrent_tool.py downloads                          # what you've grabbed lately
-python torrent_tool.py blacklist --wipe                   # unhide everything
-python torrent_tool.py prefs --sort smart --dl-dir "D:\videos"   # persistent prefs
+python torrent_tool.py search "frieren" --cached                # only ⚡ instant
+python torrent_tool.py search "frieren" --download 0            # straight to RD
+python torrent_tool.py download "magnet:?xt=..."                # direct magnet
+python torrent_tool.py status                                   # account/traffic
+python torrent_tool.py rd --delete 2                            # RD cloud mgmt
+python torrent_tool.py history            # --clear to nuke it
+python torrent_tool.py downloads          # what you grabbed recently
+python torrent_tool.py blacklist --wipe   # let the spammers back in. your call.
+python torrent_tool.py prefs --sort smart --dl-dir "D:\videos"
 ```
 
-## Demo GIF
+## quirks you'll bump into
 
-`docs/screenshot.svg` and `docs/help.svg` are real captures. To record an animated
-demo of the actual app, install [vhs](https://github.com/charmbracelet/vhs) and run:
+- **1337x, Torlock and Lime don't put the magnet in search results.** this tool
+  fetches it from the details page anyway, which makes those engines half a
+  second slower. nothing i can do about that.
+- **torlock seed counts are optimistic.** the smart ranking exists partly because
+  of this.
+- **RD links expire.** if a download dies mid-flight with a 403, re-run it. the
+  tool refuses to save the 403 error page as your movie these days (that used to
+  be a bug).
+- downloads go to `~/Downloads/TorrentTool/` by default. `prefs --dl-dir` moves it.
+
+### vs. the alternatives
+
+- **Stremio + Torrentio + RD** — great for *watching*, but it's an app with a TV
+  interface and it doesn't really search; you browse what the addon serves.
+- **jDownloader / Plowshare** — they don't search at all. you feed them links.
+- **qBittorrent + VPN** — you're seeding to strangers and your IP talks to the
+  swarm. this tool never touches the swarm.
+
+this tool is: search + debrid in one terminal screen.
+
+## files & privacy
+
+- everything lives in `~/.torrent_tool/settings.db` — encrypted token, history,
+  download log, blacklist, ⚡ cache, prefs. it sits *outside* the repo on purpose
+  so your token never ends up on GitHub.
+- your IP talks to the trackers (search) and real-debrid (everything heavy).
+  the actual data comes from RD's CDN, not from the swarm.
+
+## demo
+
+`docs/screenshot.svg` and `docs/help.svg` are real captures, not mockups.
+
+want an animated one? install [vhs](https://github.com/charmbracelet/vhs) and:
 
 ```bash
-vhs demo.tape     # writes docs/demo.gif
+vhs demo.tape     # → docs/demo.gif
 ```
 
-## Files & privacy
+## roadmap (stuff i keep meaning to do)
 
-- Settings + token: `~/.torrent_tool/settings.db` — one hidden sqlite DB holding the
-  encrypted RD token, search history, a downloads log, the blacklist, a TTL cache for
-  ⚡ checks, and prefs. It lives outside the repo on purpose, so nothing sensitive
-  ever gets pushed to GitHub.
-- Downloads: `~/Downloads/TorrentTool/` (change with `prefs --dl-dir PATH`)
+- [x] ⚡ instant badge + cached-only mode
+- [x] hidden local db (history, blacklist, prefs, download log)
+- [ ] `v` = stream straight into VLC instead of downloading
+- [ ] saved searches that auto-grab new releases into RD
+- [ ] all-debrid / other providers
+- [ ] actually render the demo gif for this readme
 
-## Disclaimer
+## disclaimer
 
-For educational purposes. Downloading copyrighted material may be illegal in your
-country — you are responsible for what you do with this tool. It works on my machine,
-which is the important part.
+for educational purposes. what you download is on you. it works on my machine,
+which is the important part. ⭐ if it works on yours.
