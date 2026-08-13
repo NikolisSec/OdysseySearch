@@ -10,7 +10,7 @@ Set TypingSpeed 60ms
 Launch python odyssey.py
 
 Sleep 2s
-Type "Mr. Robot 1080p"
+Type "Mr. Robot S01E01"
 Sleep 500ms
 Enter
 Sleep 8s
