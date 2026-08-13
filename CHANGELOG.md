@@ -1,36 +1,29 @@
 # changelog
 
-all notable changes, roughly in the order i remembered to write them down.
+newest first. if it's not here, it never happened.
 
-## 0.5.0 — odyssey
+## v1.0 Beta — "odyssey"
 
-- renamed from "torrent tool". one thing, one download — that's not a journey.
-  the name finally fits.
-- local data moves from `~/.torrent_tool` to `~/.odyssey` on first run, on its
-  own. history, blacklist, prefs all come along.
-- file is `odyssey.py` now. update any shell scripts / muscle memory.
+first public release. it's a beta and it says so out loud, so you can't
+complain that it eats a rare edge case. mostly it doesn't.
 
-## 0.4.0 — the ⚡ era
+- renamed from "torrent tool" — because one thing, one download isn't a
+  journey. the name finally fits.
+- search 8 trackers in parallel: SolidTorrents, TPB, 1337x, TorrentsCSV, Nyaa,
+  BitSearch, Torlock, LimeTorrents. duplicates merged by infohash, SEO bait
+  filtered, smart ranking on by default.
+- ⚡ instant badge — results already cached on Real-Debrid get flagged, `c`
+  toggles cached-only. the feature everyone will actually use.
+- Real-Debrid pipeline: magnet → cache → unrestricted links → download. your
+  ISP sees one https connection and nothing else.
+- hidden local db (`~/.odyssey/settings.db`): encrypted token, search history,
+  download log, blacklist, prefs. a `x` press sends a spam upload straight to
+  the void.
+- downloads are atomic (.part → rename), long names get trimmed, duplicates
+  get a " (2)", and error pages never pretend to be your movie again.
+- full CLI: search, download, status, rd cloud, history, blacklist, prefs.
+  scriptable, because why not.
 
-- **⚡ instant badge** — results already in RD's cache get flagged; `c` toggles
-  cached-only. CLI gets `--cached`. the feature i actually use the most.
-- **hidden local db** — search history is now a real sqlite table (the old json
-  blob auto-migrates), plus a downloads log, a "hide this result" blacklist, prefs
-  (default sort, download dir), and a 12h ttl cache for the instant checks.
-  plaintext tokens get re-encrypted on boot.
-- downloads are atomic now (.part → rename). no more half a movie wearing a
-  full movie's name.
-- error pages (403, etc.) no longer get saved as your download.
-- long filenames get trimmed; windows still thinks 260 chars is a lot. it isn't.
-- duplicate filenames get a " (2)" instead of silently overwriting the old one.
-- CLI no longer dies on the first bad link in a batch.
-
-## 0.3.0 — the TUI era (notes lost to the void)
-
-- multi-select queue, search history, keybinding help screen.
-- 8-tracker parallel search with infohash dedup + bait filter.
-- full CLI + vhs demo tape, svg captures.
-
-## 0.1.0
-
-- an idea, a pipe dream, one very ugly screen. we've come a long way.
+**known beta squabbles:** torlock seed counts are optimistic (they always
+were), 1337x/Torlock/Lime need a slow magnet fetch from the details page, and
+expired RD links need a re-run. nothing that'll lose your data.
