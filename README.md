@@ -33,9 +33,6 @@ then the Real-Debrid part takes over:
   1337x, TorrentsCSV, Nyaa, BitSearch, BitMusic (music-only), Torlock,
   LimeTorrents, Archive.org (the legal one). the status bar shows per-engine
   counts so you can see which tracker is having a mood today.
-- **beat packs & drum kits** — a drum kit, boom bap pack or sample kit gets a
-  🥁 badge. search "boom bap kit" and BitMusic + Archive.org actually deliver,
-  legally in Archive's case.
 - **infohash dedup** — the same release on three sites shows up as one row with
   `TPB+1337x` as the source. keeps the highest-seeded copy.
 - **smart ranking** — relevance first. `ubuntu 24.04` gives you actual ISOs, not
