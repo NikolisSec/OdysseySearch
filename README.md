@@ -142,13 +142,6 @@ this tool is: search + debrid in one terminal screen.
 - your IP talks to the trackers (search) and real-debrid (everything heavy).
   the actual data comes from RD's CDN, not from the swarm.
 
-## demo
-
-as of v1.0 Beta, `docs/screenshot.svg` and `docs/help.svg` are real captures,
-not mockups. the screenshot is a Mr. Robot search gone very well.
-
-want an animated one? that's a todo item. it's on the list. it's fine.
-
 ## roadmap (stuff i keep meaning to do)
 
 - [x] ⚡ instant badge + cached-only mode
