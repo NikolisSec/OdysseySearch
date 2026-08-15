@@ -7,9 +7,9 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-APP_DIR = Path.home() / ".odyssey"; APP_DIR.mkdir(exist_ok=True)
+APP_DIR = Path.home() / ".odyssey"; APP_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = APP_DIR / "settings.db"
-DL_DIR  = Path.home() / "Downloads" / "Odyssey"; DL_DIR.mkdir(exist_ok=True)
+DL_DIR  = Path.home() / "Downloads" / "Odyssey"; DL_DIR.mkdir(parents=True, exist_ok=True)
 SALT_FILE = APP_DIR / ".salt"; KEY_FILE = APP_DIR / ".key"
 HEADERS = {"User-Agent": "Mozilla/5.0 Gecko Firefox/128.0"}
 TIMEOUT = 25
@@ -106,7 +106,7 @@ def apply_prefs():
     global DL_DIR
     d = pref_get("dl_dir")
     if d:
-        DL_DIR = Path(d); DL_DIR.mkdir(exist_ok=True)
+        DL_DIR = Path(d); DL_DIR.mkdir(parents=True, exist_ok=True)
 
 def dl_log(title, path=None, size=None, status="ok"):
     try: db.execute("INSERT INTO downloads(ts,title,path,size,status) VALUES(?,?,?,?,?)",
