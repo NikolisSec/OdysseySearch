@@ -74,12 +74,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          shopt -s globstar
-          ASSETS=()
-          for f in dist/**/*; do
-            [ -f "$f" ] && ASSETS+=("--attach-file" "$f")
-          done
-          gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+          gh release create "$GITHUB_REF_NAME" \
+            dist/odyssey-windows/odyssey.exe \
+            dist/odyssey-linux/*_all.deb \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --notes "Built from \`$GITHUB_SHA\`.\n\n- Windows: single-file \`odyssey.exe\`\n- Linux: \`odyssey_*.deb\` (bundled deps)"
