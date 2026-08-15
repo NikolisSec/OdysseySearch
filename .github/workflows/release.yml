@@ -23,6 +23,8 @@ jobs:
         run: |
           pyinstaller --onefile --name odyssey `
             --collect-all textual --collect-all rich `
+            --icon odyssey.ico `
+            --version-file odyssey_version.txt `
             --distpath dist odyssey.py
       - uses: actions/upload-artifact@v4
         with:
