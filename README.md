@@ -122,6 +122,7 @@ Full key map, CLI flags, and privacy details live in the **[Wiki](https://github
 - [ ] `v` — stream straight into VLC
 - [ ] Saved searches that auto-grab into RD
 - [ ] AllDebrid / other providers
+- [ ] Download Manager
 
 ## Disclaimer
 
