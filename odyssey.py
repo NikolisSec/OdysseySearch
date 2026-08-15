@@ -1384,6 +1384,17 @@ def cmd_ui():
     if not TUI_OK:
         print("The TUI requires 'textual'.\nInstall it first:  pip install textual")
         return
+    if os.name == "nt":  # legacy conhost (Win10 cmd) ignores ANSI + UTF-8 by default
+        try:
+            import ctypes
+            k32 = ctypes.windll.kernel32
+            k32.SetConsoleOutputCP(65001); k32.SetConsoleCP(65001)
+            h = k32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            mode = ctypes.c_uint32()
+            k32.GetConsoleMode(h, ctypes.byref(mode))
+            k32.SetConsoleMode(h, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception: pass
     TorrentApp().run()
 
 def cmd_history(args):
