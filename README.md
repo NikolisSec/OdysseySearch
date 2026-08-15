@@ -61,64 +61,11 @@ python odyssey.py token <your-token>     # or press t inside the app
 
 ## Usage
 
-```bash
-python odyssey.py       # launch the interface
-```
+## Release binaries
 
-### Keyboard shortcuts
+Prefer a ready-made binary? Grab the latest **v1.0.3** release:
 
-| Key | Action |
-|---|---|
-| `/` | focus the search box (↑/↓ browse history) |
-| `Enter` | download this torrent |
-| `Space` | mark / unmark for the queue |
-| `Esc` | clear all marks |
-| `d` | start downloading the marked queue |
-| `o` | cycle sort: smart → seeds → size → name |
-| `f` | filter by source tracker |
-| `c` | toggle ⚡ cached-only mode |
-| `C` | clear all filters |
-| `x` | hide this result forever (blacklist) |
-| `m` | copy the magnet link to clipboard |
-| `t` | set / replace the RD API token |
-| `r` | refresh results |
-| `s` | show RD cloud / account status |
-| `?` | show the help overlay |
-| `q` | quit |
+- **Windows** — `odyssey.exe` (a single-file executable; needs no Python install)
+- **Debian/Ubuntu** — `odyssey_1.0.3_all.deb` (install with `sudo dpkg -i odyssey_1.0.3_all.deb`)
 
-Search syntax: `Mr. Robot 1080p min:20` → only non-spam 1080p results with 20+ seeders.
-
-### Scriptable (CLI)
-
-```bash
-python odyssey.py search "ubuntu 24.04" --sort smart --min-seeds 5 -n 10
-python odyssey.py search "frieren" --cached                    # instant only
-python odyssey.py search "frieren" --download 0                # grab top hit
-python odyssey.py download "magnet:?xt=urn:btih:..."           # direct magnet
-python odyssey.py status                                       # account/traffic
-python odyssey.py rd --delete 2                                # RD cloud mgmt
-python odyssey.py history                                      # search history
-python odyssey.py downloads                                    # grabbed files
-python odyssey.py blacklist --wipe                             # let spammers back in?
-python odyssey.py prefs --sort smart --dl-dir "D:\videos"      # defaults
-```
-
-Full key map, CLI flags, and privacy details live in the **[Wiki](https://github.com/NikolisSec/OdysseySearch/wiki)**.
-
-## Roadmap
-
-- [x] ⚡ Instant badge + cached-only mode
-- [x] Hidden local DB
-- [ ] `v` — stream straight into VLC
-- [ ] Saved searches that auto-grab into RD
-- [ ] AllDebrid / other providers
-
-## Disclaimer
-
-Built for educational purposes — and because searching ten trackers by hand is
-silly. What you download is on you. It works on my machine, which is the
-important part. 👍 If it works on yours, drop a star and say hi.
-
-<p align="center">
-  <sub>OdysseySearch — search, dedupe, debrid. Not affiliated with Real-Debrid or any tracker.</sub>
-</p>
+Both are built straight from `main` on every tagged release.
