@@ -70,6 +70,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+      - name: Generate checksums
+        run: |
+          cd dist
+          find . -type f \( -name "*.exe" -o -name "*.deb" \) -exec sha256sum {} \; > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,6 +82,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             dist/odyssey-windows/odyssey.exe \
             dist/odyssey-linux/*_all.deb \
+            dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
-            --notes "Built from \`$GITHUB_SHA\`.\n\n- Windows: single-file \`odyssey.exe\`\n- Linux: \`odyssey_*.deb\` (bundled deps)"
+            --generate-notes
