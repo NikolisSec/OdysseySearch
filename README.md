@@ -69,3 +69,8 @@ Prefer a ready-made binary? Grab the latest **v1.0.3** release:
 - **Debian/Ubuntu** — `odyssey_1.0.3_all.deb` (install with `sudo dpkg -i odyssey_1.0.3_all.deb`)
 
 Both are built straight from `main` on every tagged release.
+---
+
+## License
+
+MIT © 2026 NikolisSec — see [`LICENSE`](LICENSE) for the full text.
