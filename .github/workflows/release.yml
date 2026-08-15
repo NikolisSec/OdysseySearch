@@ -1,0 +1,85 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt pyinstaller
+      - name: Build single-file exe
+        run: |
+          pyinstaller --onefile --name odyssey `
+            --collect-all textual --collect-all rich `
+            --distpath dist odyssey.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: odyssey-windows
+          path: dist/odyssey.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bundle deps + build deb
+        run: |
+          set -e
+          VERSION="${GITHUB_REF_NAME#v}"
+          PKG="pkg"
+          mkdir -p "$PKG/DEBIAN" "$PKG/usr/bin" "$PKG/usr/lib/odyssey" "$PKG/usr/share/doc/odyssey"
+          pip install -r requirements.txt --target "$PKG/usr/lib/odyssey/deps" --quiet
+          cp odyssey.py "$PKG/usr/lib/odyssey/odyssey.py"
+          printf '#!/bin/sh\nexec python3 /usr/lib/odyssey/odyssey.py "$@"\n' > "$PKG/usr/bin/odyssey"
+          chmod +x "$PKG/usr/bin/odyssey"
+          cat > "$PKG/DEBIAN/control" <<EOF
+  Package: odyssey
+  Version: $VERSION
+  Section: net
+  Priority: optional
+  Architecture: all
+  Maintainer: NikolisSec <nikolissec@users.noreply.github.com>
+  Depends: python3 (>= 3.10)
+  Homepage: https://github.com/NikolisSec/OdysseySearch
+  Description: Search 10 torrent trackers, dedupe, download through Real-Debrid.
+   Terminal search engine that merges releases, filters bait, flags instant
+   cached results and downloads straight via Real-Debrid.
+  EOF
+          cp LICENSE "$PKG/usr/share/doc/odyssey/copyright"
+          dpkg-deb --build --root-owner-group "$PKG" "odyssey_${VERSION}_all.deb"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: odyssey-linux
+          path: odyssey_*_all.deb
+
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s globstar
+          ASSETS=()
+          for f in dist/**/*; do
+            [ -f "$f" ] && ASSETS+=("--attach-file" "$f")
+          done
+          gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Built from \`$GITHUB_SHA\`.\n\n- Windows: single-file \`odyssey.exe\`\n- Linux: \`odyssey_*.deb\` (bundled deps)"
