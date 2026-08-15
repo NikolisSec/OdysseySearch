@@ -1,0 +1,15 @@
+# python cruft
+__pycache__/
+*.pyc
+*.pyo
+
+*.torrent
+
+*.part
+.playwright-mcp/
+
+# local settings live in ~/.odyssey anyway, but just in case
+settings.db
+
+# throwaway safety copies, not source of truth
+backup/
