@@ -73,6 +73,10 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
+          find . -type f \( -name "*.exe" -o -name "*.deb" \) | while read -r f; do
+            sha256sum "$f" > "$f.sha256"
+          done
+          find . -name "*.sha256" -exec echo "made {}" \;
           find . -type f \( -name "*.exe" -o -name "*.deb" \) -exec sha256sum {} \; > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Create GitHub Release
@@ -81,7 +85,9 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             dist/odyssey-windows/odyssey.exe \
+            dist/odyssey-windows/odyssey.exe.sha256 \
             dist/odyssey-linux/*_all.deb \
+            dist/odyssey-linux/*_all.deb.sha256 \
             dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
