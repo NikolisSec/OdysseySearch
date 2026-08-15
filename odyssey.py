@@ -7,6 +7,25 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+# ── emoji fallback ──
+# legacy conhost (cmd.exe on Win10) can't render color emoji → swap for ASCII.
+def _legacy_conhost():
+    if os.name != "nt": return False
+    return not (os.environ.get("WT_SESSION") or os.environ.get("TERM_PROGRAM") or os.environ.get("TERM"))
+_LEGACY_CONHOST = _legacy_conhost()
+
+_EMO_ASCII = {
+    "📦 Queue": "Queue", "📋 Magnet": "Magnet", "🔑 Real-Debrid": "Real-Debrid",
+    "⚡ ODYSSEY SEARCHER": "ODYSSEY SEARCHER", "⚡": "*", "✓": "+", "✗": "-", "⚠": "!", "☁": "~", "⊘": "-",
+    "🔍": ">", "🔗": "→", "⬇": "↓", "📦": "", "📋": "", "🔑": "",
+    "🥁": "pr", "🌸": "an", "📺": "tv", "🎬": "mv", "🎮": "gm", "🎵": "mu", "📚": "bk", "💾": "sw",
+}
+def g(s):
+    """ASCII-ize emoji for terminals that can't render them (no-op elsewhere)."""
+    if not _LEGACY_CONHOST or not isinstance(s, str): return s
+    for k, v in _EMO_ASCII.items(): s = s.replace(k, v)
+    return s
+
 APP_DIR = Path.home() / ".odyssey"; APP_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = APP_DIR / "settings.db"
 DL_DIR  = Path.home() / "Downloads" / "Odyssey"; DL_DIR.mkdir(parents=True, exist_ok=True)
@@ -208,7 +227,7 @@ CAT_RULES = [
 ]
 def cat_badge(name):
     for b, rx in CAT_RULES:
-        if rx.search(str(name or '')): return b
+        if rx.search(str(name or '')): return g(b)
     return "·"
 
 def search_solidtorrents(q,n=30):
@@ -696,7 +715,7 @@ def cmd_search(args):
     print(f"\n{len(results)} results ({srcs}) sort={args.sort} min_seeds={min_seeds}{' cached-only' if args.cached else ''}\n")
     hist_add(query)
     for i,r in enumerate(results[:args.limit]):
-        badge="⚡" if r.get("rd_cached") else " "
+        badge=g("⚡") if r.get("rd_cached") else " "
         print(f"[{i:>3}] {badge} {cat_badge(r['n'])} {r['s']:>5}S {r['l']:>5}L  {r['sz']:>10}  {r['src']:<20}  {tr(r['n'],60)}")
         if args.detail:
             if r.get('mag'): print(f"      magnet: {r['mag'][:70]}...")
@@ -822,9 +841,9 @@ if TUI_OK:
 
         def compose(self) -> ComposeResult:
             with Container(id="token-box"):
-                yield Label("[bold #7ee787]🔑 Real-Debrid API token[/]")
+                yield Label(g("[bold #7ee787]🔑 Real-Debrid API token[/]"))
                 yield Label("[#8b949e]Get yours at [u]https://real-debrid.com/apitoken[/u][/]")
-                yield Input(placeholder="Paste token, press Enter…", password=True, id="token-input")
+                yield Input(placeholder=g("Paste token, press Enter…"), password=True, id="token-input")
                 yield Label("", id="token-error")
 
         def on_mount(self): self.query_one("#token-input", Input).focus()
@@ -851,7 +870,7 @@ if TUI_OK:
                 db.set("rd_api_token", tok)
                 self.dismiss(user)
             else:
-                self.query_one("#token-error", Label).update("[#f85149]✗ Invalid token — try again.[/]")
+                self.query_one("#token-error", Label).update(g("[#f85149]✗ Invalid token — try again.[/]"))
 
     class FilesScreen(ModalScreen):
         """Modal listing unrestricted RD files; pick one or all to download."""
@@ -866,7 +885,7 @@ if TUI_OK:
 
         def compose(self) -> ComposeResult:
             with Container(id="files-box"):
-                yield Label(f"[bold #3fb950]✓ Cached on Real-Debrid[/]  [#8b949e]— {len(self.links)} file(s) ready[/]")
+                yield Label(g(f"[bold #3fb950]✓ Cached on Real-Debrid[/]  [#8b949e]— {len(self.links)} file(s) ready[/]"))
                 yield OptionList(*[Option(f"[#e6edf3]{tr(l['f'], 62)}[/]  [#8b949e]({fs(l['sz'])})[/]") for l in self.links], id="files-list")
                 yield Label("[#8b949e]Enter = download file · a = download all · Esc = keep in cloud[/]")
 
@@ -888,7 +907,7 @@ if TUI_OK:
 
         def compose(self) -> ComposeResult:
             with Container(id="rd-box"):
-                yield Label("[bold #bc8cff]☁ Real-Debrid cloud[/]")
+                yield Label(g("[bold #bc8cff]☁ Real-Debrid cloud[/]"))
                 yield DataTable(id="rd-table", cursor_type="row", zebra_stripes=True)
                 yield Label("[#8b949e]x = delete selected · Esc = close[/]")
 
@@ -968,7 +987,7 @@ if TUI_OK:
         BINDINGS = [Binding("escape", "cancel", "Close"), Binding("question_mark", "cancel", "Close", show=False)]
         def compose(self) -> ComposeResult:
             with Container(id="help-box"):
-                yield Static(HELP_TEXT)
+                yield Static(g(HELP_TEXT))
         def action_cancel(self): self.dismiss(None)
 
     class TorrentApp(App):
@@ -1028,17 +1047,19 @@ if TUI_OK:
 
         def compose(self) -> ComposeResult:
             with Horizontal(id="topbar"):
-                yield Static("[bold #7ee787]⚡ ODYSSEY SEARCHER[/]  [#8b949e]search · cache · download[/]", id="app-title")
+                yield Static(g("[bold #7ee787]⚡ ODYSSEY SEARCHER[/]  [#8b949e]search · cache · download[/]"), id="app-title")
                 yield Static("[#8b949e]…[/]", id="rd-status")
-            yield Input(placeholder="🔍  Search 10 engines — SolidTorrents · TPB · 1337x · TorrentsCSV · Nyaa · BitSearch · BitMusic · Torlock · Lime · Archive", id="search")
+            yield Input(placeholder=g("🔍  Search 10 engines — SolidTorrents · TPB · 1337x · TorrentsCSV · Nyaa · BitSearch · BitMusic · Torlock · Lime · Archive"), id="search")
             yield DataTable(id="results", cursor_type="row", zebra_stripes=True)
             with Horizontal(id="bottombar"):
                 yield Static("", id="status")
                 yield ProgressBar(total=100, show_percentage=True, show_eta=False, id="pbar")
             yield Footer()
 
-        def _status(self, txt): self.query_one("#status", Static).update(txt)
-        def _rd_label(self, txt): self.query_one("#rd-status", Static).update(txt)
+        def _status(self, txt): self.query_one("#status", Static).update(g(txt))
+        def _rd_label(self, txt): self.query_one("#rd-status", Static).update(g(txt))
+        def notify(self, message="", *args, **kwargs):
+            super().notify(g(message), *args, **kwargs)
         def _progress(self, pct, txt):
             pb = self.query_one("#pbar", ProgressBar)
             if not pb.display: pb.display = True
@@ -1052,7 +1073,7 @@ if TUI_OK:
             return idx, self.view[idx]
 
         def on_mount(self):
-            self.query_one("#results", DataTable).add_columns("#", "⚡", "Cat", "Seeds", "Leech", "Size", "Source", "Name")
+            self.query_one("#results", DataTable).add_columns("#", g("⚡"), "Cat", "Seeds", "Leech", "Size", "Source", "Name")
             self._hide_pbar()
             self.query_one("#search", Input).focus()
             self._status(f"[#8b949e]Type a query, hit Enter — {len(ENGINES)} engines · try[/] min:10 [#8b949e]to filter seeders[/]")
@@ -1096,7 +1117,7 @@ if TUI_OK:
             parts = [f"sort:{self.sort_mode}"]
             if self.src_filter: parts.append(f"src:{self.src_filter}")
             if self.min_seeds: parts.append(f"min:{self.min_seeds}")
-            if self.cached_only: parts.append("⚡cached")
+            if self.cached_only: parts.append(g("⚡") + " cached")
             return " · ".join(parts)
 
         def _apply_view(self, cursor_to=None):
@@ -1108,9 +1129,9 @@ if TUI_OK:
             t.clear()
             for i, r in enumerate(self.view):
                 marked = r.get("_id") in self.marked
-                t.add_row(Text(("✓" if marked else " ") + str(i),
+                t.add_row(Text(g(("✓" if marked else " ") + str(i)),
                                style="bold #3fb950" if marked else "#8b949e"),
-                          Text("⚡" if r.get("rd_cached") else "", style="#f0c674" if r.get("rd_cached") else ""),
+                          Text(g("⚡") if r.get("rd_cached") else "", style="#f0c674" if r.get("rd_cached") else ""),
                           Text(cat_badge(r["n"])),
                           _seeds_cell(r["s"]),
                           _leech_cell(r["l"]),
@@ -1424,7 +1445,7 @@ def cmd_dl_history(args):
     if not rows: print("No downloads logged yet."); return
     for ts, title, path, size, status in rows:
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts))
-        mark = "✓" if status == "ok" else "✗"
+        mark = g("✓") if status == "ok" else g("✗")
         sz = fs(size) if size else "?"
         print(f"{mark} {when}  {sz:>8}  {tr(title, 70)}  {status}")
 
@@ -1444,7 +1465,7 @@ def main():
     srch.add_argument("-d","--detail",action="store_true",help="Show magnet/URL")
     srch.add_argument("--sort",choices=["smart","seeds","size","name"],default="seeds",help="Sort order (default: seeds)")
     srch.add_argument("--min-seeds",type=int,default=0,metavar="N",help="Only show results with >= N seeders")
-    srch.add_argument("--cached",action="store_true",help="Only show results already cached on RD (⚡)")
+    srch.add_argument("--cached",action="store_true",help=f"Only show results already cached on RD ({g('⚡')})")
     srch.add_argument("--download",type=int,metavar="IDX",help="Download result by index")
 
     dl=sub.add_parser("download",help="Download via RD")
