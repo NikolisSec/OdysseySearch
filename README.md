@@ -1,16 +1,14 @@
 # ⚡ Odyssey Searcher
 
-**v1.0 Beta** — feature-complete enough to be useful, young enough to make
-excuses. no changelog yet — it's brand new. the git history is the changelog.
+**v1.0 Beta**
 
 Search 10 open trackers at once, dedupe the noise, and push whatever you pick
-through **Real-Debrid** — from a terminal that doesn't look like 1995.
+through **Real-Debrid** — all from your terminal.
 
 ![screenshot](docs/screenshot.svg)
 
-> this started as a "fine, i'll write my own" project because i got tired of
-> opening five tracker tabs and copy-pasting magnets. it was called "torrent
-> tool" for a while — accurate, and *so boring*. meet odyssey.
+> this started as a "fine, I'll write my own" project because I got tired of
+> opening five tracker tabs and copy-pasting magnets.
 
 ## what it actually does
 
@@ -51,7 +49,6 @@ then the Real-Debrid part takes over:
   a blacklist, prefs — one sqlite file in `~/.odyssey`.
 - **`x` hides a result forever** — the blacklist. torlock's "verified 6000
   seeders" uploads go straight to hell where they belong.
-- **full CLI** — every engine is reachable from a shell script too.
 
 ## install
 
