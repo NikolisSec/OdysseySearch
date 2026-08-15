@@ -44,18 +44,18 @@ jobs:
           printf '#!/bin/sh\nexec python3 /usr/lib/odyssey/odyssey.py "$@"\n' > "$PKG/usr/bin/odyssey"
           chmod +x "$PKG/usr/bin/odyssey"
           cat > "$PKG/DEBIAN/control" <<EOF
-  Package: odyssey
-  Version: $VERSION
-  Section: net
-  Priority: optional
-  Architecture: all
-  Maintainer: NikolisSec <nikolissec@users.noreply.github.com>
-  Depends: python3 (>= 3.10)
-  Homepage: https://github.com/NikolisSec/OdysseySearch
-  Description: Search 10 torrent trackers, dedupe, download through Real-Debrid.
-   Terminal search engine that merges releases, filters bait, flags instant
-   cached results and downloads straight via Real-Debrid.
-  EOF
+          Package: odyssey
+          Version: $VERSION
+          Section: net
+          Priority: optional
+          Architecture: all
+          Maintainer: NikolisSec <nikolissec@users.noreply.github.com>
+          Depends: python3 (>= 3.10)
+          Homepage: https://github.com/NikolisSec/OdysseySearch
+          Description: Search 10 torrent trackers, dedupe, download through Real-Debrid.
+           Terminal search engine that merges releases, filters bait, flags instant
+           cached results and downloads straight via Real-Debrid.
+          EOF
           cp LICENSE "$PKG/usr/share/doc/odyssey/copyright"
           dpkg-deb --build --root-owner-group "$PKG" "odyssey_${VERSION}_all.deb"
       - uses: actions/upload-artifact@v4
