@@ -11,6 +11,9 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      WIN_CERT_BASE64: ${{ secrets.WIN_CERT_BASE64 }}
+      WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,7 +30,7 @@ jobs:
             --version-file odyssey_version.txt `
             --distpath dist odyssey.py
       - name: Code-sign exe (if cert secrets configured)
-        if: ${{ secrets.WIN_CERT_BASE64 != '' && secrets.WIN_CERT_PASSWORD != '' }}
+        if: ${{ env.WIN_CERT_BASE64 != '' && env.WIN_CERT_PASSWORD != '' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
