@@ -65,10 +65,26 @@ python odyssey.py token <your-token>     # or press t inside the app
 python odyssey.py       # launch the interface
 ```
 
-- `/` — focus the search box ↑↓ history · `Enter` — download · `Space` — mark / `Esc` clear
-- `d` — download the marked queue · `c` — ⚡ cached-only · `C` — clear filters
-- `o` — sort (smart/seeds/size/name) · `f` — filter by source · `x` — blacklist · `m` — copy magnet
-- `t` — set token · `r` — refresh · `s` — RD status · `?` — help · `q` — quit
+### Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `/` | focus the search box (↑/↓ browse history) |
+| `Enter` | download this torrent |
+| `Space` | mark / unmark for the queue |
+| `Esc` | clear all marks |
+| `d` | start downloading the marked queue |
+| `o` | cycle sort: smart → seeds → size → name |
+| `f` | filter by source tracker |
+| `c` | toggle ⚡ cached-only mode |
+| `C` | clear all filters |
+| `x` | hide this result forever (blacklist) |
+| `m` | copy the magnet link to clipboard |
+| `t` | set / replace the RD API token |
+| `r` | refresh results |
+| `s` | show RD cloud / account status |
+| `?` | show the help overlay |
+| `q` | quit |
 
 Search syntax: `Mr. Robot 1080p min:20` → only non-spam 1080p results with 20+ seeders.
 
