@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 3, 0),
-    prodvers=(1, 0, 3, 0),
+    filevers=(1, 0, 4, 0),
+    prodvers=(1, 0, 4, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -13,12 +13,12 @@ VSVersionInfo(
     StringFileInfo([StringTable("040904B0", [
       StringStruct("CompanyName", "NikolisSec"),
       StringStruct("FileDescription", "Odyssey Searcher - torrent meta-search + Real-Debrid downloader"),
-      StringStruct("FileVersion", "1.0.3"),
+      StringStruct("FileVersion", "1.0.4"),
       StringStruct("InternalName", "odyssey"),
       StringStruct("LegalCopyright", "Copyright (c) NikolisSec"),
       StringStruct("OriginalFilename", "odyssey.exe"),
       StringStruct("ProductName", "Odyssey Searcher"),
-      StringStruct("ProductVersion", "1.0.3"),
+      StringStruct("ProductVersion", "1.0.4"),
     ])]),
     VarFileInfo([VarStruct("Translation", [1033, 1200])]),
   ],

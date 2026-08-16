@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os, sys, sqlite3, json, re, hashlib, base64, urllib.parse
 import requests, time, shutil, argparse, threading, math
 from pathlib import Path
@@ -7,8 +5,6 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# ── emoji fallback ──
-# legacy conhost (cmd.exe on Win10) can't render color emoji → swap for ASCII.
 def _legacy_conhost():
     if os.name != "nt": return False
     return not (os.environ.get("WT_SESSION") or os.environ.get("TERM_PROGRAM") or os.environ.get("TERM"))
@@ -21,7 +17,7 @@ _EMO_ASCII = {
     "🥁": "pr", "🌸": "an", "📺": "tv", "🎬": "mv", "🎮": "gm", "🎵": "mu", "📚": "bk", "💾": "sw",
 }
 def g(s):
-    """ASCII-ize emoji for terminals that can't render them (no-op elsewhere)."""
+
     if not _LEGACY_CONHOST or not isinstance(s, str): return s
     for k, v in _EMO_ASCII.items(): s = s.replace(k, v)
     return s
@@ -54,7 +50,7 @@ class DB:
         self._migrate_history()
         self._rearm_secrets()
     def _rearm_secrets(self):
-        # if a plaintext token survived from before we added encryption, lock it up.
+
         try:
             r = self.c.execute("SELECT v,enc FROM config WHERE k='rd_api_token'").fetchone()
             if r and not r[1]:
@@ -89,7 +85,7 @@ class DB:
 db = DB()
 
 def hist_get():
-    """Search history, newest first (max 50)."""
+
     try: return [r[0] for r in db.query("SELECT q FROM history ORDER BY ts DESC LIMIT 50")]
     except Exception: return []
 
@@ -157,14 +153,14 @@ def tr(s,n): return (str(s or ''))[:n]+('...' if len(str(s or ''))>n else '')
 
 SIZE_RE = re.compile(r'([\d.]+)\s*([KMGT]i?B|B)', re.I)
 def parse_size(s):
-    """'624.0 MiB' -> bytes (0 if unparseable)."""
+
     m=SIZE_RE.search(str(s or ''))
     if not m: return 0
     u=m.group(2).upper().replace('I','')
     return int(float(m.group(1))*{'B':1,'KB':1024,'MB':1024**2,'GB':1024**3,'TB':1024**4}.get(u,1))
 
 def intx(s):
-    """'3,205' -> 3205 (0 if no digits)."""
+
     d=re.sub(r'[^\d]','',str(s or ''))
     return int(d) if d else 0
 
@@ -176,7 +172,7 @@ TRACKERS = ("&tr=udp://tracker.opentrackr.org:1337/announce"
 def magnet_for(ih): return f"magnet:?xt=urn:btih:{ih}{TRACKERS}" if ih else ""
 
 def btih_from_torrent(data):
-    """Infohash = SHA1 of the bencoded 'info' dict inside a .torrent file."""
+
     i=data.find(b"4:info")
     if i<0: return None
     i+=6; pos=i
@@ -203,7 +199,7 @@ def btih_from_torrent(data):
     return None
 
 def fetch_archive_magnet(x):
-    """archive.org buries its magnet inside each item's own .torrent. dig it up."""
+
     m=re.search(r'/details/([^/\s]+)', x.get('web','') or '')
     if not m: return None
     iid=m.group(1)
@@ -216,8 +212,8 @@ def fetch_archive_magnet(x):
     except: return None
 
 CAT_RULES = [
-    ("🥁", re.compile(r'\b(drum\s?kit|drum\s?pack|drum\s?loop|drum\s?sample|drum\s?midi|boom\s?bap|one\s?shots?|sample\s?pack|sample\s?kit|midi\s?kit|melody\s?pack|vocal\s?pack|break\s?kit|trap\s?kit|beat\s?pack|wav\s?pack|ableton\s?pack|serum\s?pack|kontakt\s?kit|lo[\- ]?fi\s?kit)\b', re.I)),  # producers rise up
-    ("🌸", re.compile(r'^\[(erai|subsplease|.*raws|.*subs)\]', re.I)),                      # weebs get their own badge. you're welcome.
+    ("🥁", re.compile(r'\b(drum\s?kit|drum\s?pack|drum\s?loop|drum\s?sample|drum\s?midi|boom\s?bap|one\s?shots?|sample\s?pack|sample\s?kit|midi\s?kit|melody\s?pack|vocal\s?pack|break\s?kit|trap\s?kit|beat\s?pack|wav\s?pack|ableton\s?pack|serum\s?pack|kontakt\s?kit|lo[\- ]?fi\s?kit)\b', re.I)),
+    ("🌸", re.compile(r'^\[(erai|subsplease|.*raws|.*subs)\]', re.I)),
     ("📺", re.compile(r'\bs\d{1,2}e\d{1,2}\b|\bseason\s*\d+\b|hdtv|\bcomplete\s+series\b', re.I)),
     ("🎬", re.compile(r'\b(1080p|2160p|720p|480p|blu[\- ]?ray|bdrip|web[\- ]?dl|webrip|dvdrip|hdrip|remux|x264|x265|hevc)\b', re.I)),
     ("🎮", re.compile(r'\b(fitgirl|reloaded|codex|razor1911|skidrow|repack|steamrip|elamigos|dodi)\b', re.I)),
@@ -229,6 +225,332 @@ def cat_badge(name):
     for b, rx in CAT_RULES:
         if rx.search(str(name or '')): return g(b)
     return "·"
+
+def _sz_bytes(s):
+    m = re.match(r'(\d+(?:\.\d+)?)\s*(b|kb|kib|mb|mib|gb|gib|tb|tib)?$', str(s or '').strip(), re.I)
+    if not m: return None
+    unit = (m.group(2) or 'b').lower().replace('i', '')
+    return int(float(m.group(1)) * {'b': 1, 'kb': 1024, 'mb': 1024 ** 2, 'gb': 1024 ** 3, 'tb': 1024 ** 4}[unit])
+
+S1E_RE    = re.compile(r'\bs(\d{1,2})-?e(\d{1,3})(?:\s*[-–to]\s*(?:e)?(\d{1,3}))?\b', re.I)
+SRANGE_RE = re.compile(r'\bs(\d{1,2})\s*(?:-|–|to)\s*s?(\d{1,2})\b', re.I)
+SEAS_RE   = re.compile(r'\bs(\d{1,2})\b', re.I)
+SEASW_RE  = re.compile(r'\bseason\s*(\d{1,2})\b', re.I)
+SEASW2_RE = re.compile(r'(\bseason\s+)(\d{1,2})\b', re.I)
+EPW_RE    = re.compile(r'\bep(?:isode)?\.?\s*(\d{1,3})\b', re.I)
+XN_RE     = re.compile(r'\b(\d{1,2})x(\d{1,3})(?:\s*(?:-|–|to)\s*(\d{1,3}))?\b', re.I)
+YEAR_RE   = re.compile(r'\b(?:19|20)\d{2}\b')
+IMDB_RE   = re.compile(r'\b(?:imdb[-_ ]?)?(tt\d{7,8})\b', re.I)
+SERIES_RE = re.compile(r'\b(complete\s*series|full\s*series|series\s*pack|boxset|\[all\]|the\s*complete)\b', re.I)
+
+QUALITY_RE = [
+    ("2160p", re.compile(r'\b(2160p|4k|uhd|uhdbluray)\b', re.I)),
+    ("1080p", re.compile(r'\b1080p\b', re.I)),
+    ("720p",  re.compile(r'\b720p\b', re.I)),
+    ("480p",  re.compile(r'\b480p\b', re.I)),
+]
+CODEC_RE = [
+    ("h265", re.compile(r'\b(x265|h265|hevc)\b', re.I)),
+    ("h264", re.compile(r'\b(x264|h264|avc1?)\b', re.I)),
+    ("av1",  re.compile(r'\bav1\b', re.I)),
+]
+HDR_RE  = re.compile(r'\bhdr10\+?\b|\bdolby\s?vision\b|\bdovi\b|\bhdr\b', re.I)
+DV_RE   = re.compile(r'\bdolby\s?vision\b|\bdovi\b|\bhdr10\+?\b', re.I)
+AUDIO_RE = [
+    ("atmos", re.compile(r'\batmos\b|\bdd\+?\s?atmos\b', re.I)),
+    ("truehd", re.compile(r'\btrue[- ]?hd\b', re.I)),
+    ("dtsx",  re.compile(r'\bdts[- ]?x\b', re.I)),
+    ("dtshd", re.compile(r'\bdts[- ]?hd(?:[- ]?(?:ma|hr))?\b', re.I)),
+    ("dts",   re.compile(r'\bdts\b', re.I)),
+    ("ac3",   re.compile(r'\bac3\b|\bdolby\s?digital\b', re.I)),
+    ("aac",   re.compile(r'\baac\b', re.I)),
+    ("flac",  re.compile(r'\bflac\b', re.I)),
+    ("mp3",   re.compile(r'\bmp3\b', re.I)),
+]
+LANG_RE = [
+    ("multi", re.compile(r'\b(multi|dua?l(?:[- ]?audio)?)\b', re.I)),
+    ("eng",   re.compile(r'\b(english|engl|\[eng\])\b', re.I)),
+    ("jap",   re.compile(r'\bjap(?:anese)?\b|\b日本\b', re.I)),
+    ("esp",   re.compile(r'\b(s?panish|español|\[es\]|latino)\b', re.I)),
+    ("fre",   re.compile(r'\bfre(?:nch)?\b|\bfr\b', re.I)),
+    ("ger",   re.compile(r'\bger(?:man)?\b|\bdeutsch\b', re.I)),
+    ("sub",   re.compile(r'\bsub(?:s|title)?(?:ed|s)?\b', re.I)),
+]
+TV_RE     = re.compile(r'\bhdtv\b|\bcomplete\s*series\b|\bmini[- ]?series\b', re.I)
+GAME_RE   = re.compile(r'\b(fitgirl|dodi|elamigos|reloaded|codex|razor1911|skidrow|steamrip|repack|gog)\b|\bpc[\s-]?game\b|\bgame[\s-]?pc\b|\b(cracked|full[\s-]?version|nsz|xci|rom)\b', re.I)
+ANIME_TAG = re.compile(r'^\[(?:erai|subsplease|.*raws|.*subs)\]', re.I)
+KIND_ANIME_MARK = re.compile(r'\b(?:sub|dub|s\d{1,2}e\d{1,2})\b', re.I)
+
+def _norm(s):
+
+    s = ''.join(ch for ch in s.lower() if ch.isalnum() or ch.isspace())
+    return s
+
+def media_parse(title, cached=None):
+
+    t = str(title or '')
+    tl = t.lower()
+    m = {"text": _norm(t), "raw": t}
+
+    mo = S1E_RE.search(tl)
+    if mo:
+        m["season"], m["episode"] = int(mo.group(1)), int(mo.group(2))
+        if mo.group(3): m["episode_max"] = int(mo.group(3))
+    else:
+        mo = SRANGE_RE.search(tl)
+        if mo:
+            m["season"], m["season_max"] = int(mo.group(1)), int(mo.group(2))
+        else:
+            mo = XN_RE.search(tl)
+            if mo:
+                m["season"], m["episode"] = int(mo.group(1)), int(mo.group(2))
+                if mo.group(3): m["episode_max"] = int(mo.group(3))
+            else:
+                mo = SEASW_RE.search(tl)
+                if not mo: mo = SEASW2_RE.search(tl)
+                if mo: m["season"] = int(mo.group(1))
+                else:
+                    mo = SEAS_RE.search(tl)
+                    if mo and not re.search(r'\bsi\b', tl): m["season"] = int(mo.group(1))
+                mo = EPW_RE.search(tl)
+                if mo: m["episode"] = int(mo.group(1))
+
+    for q, rx in QUALITY_RE:
+        if rx.search(tl): m["quality"] = q; break
+    for c, rx in CODEC_RE:
+        if rx.search(tl): m["codec"] = c; break
+    if HDR_RE.search(tl): m["hdr"] = True
+    if DV_RE.search(tl):  m["dv"] = True
+    for a, rx in AUDIO_RE:
+        if rx.search(tl): m.setdefault("audio", []).append(a)
+    for l, rx in LANG_RE:
+        if rx.search(tl): m.setdefault("lang", []).append(l)
+
+    mo = IMDB_RE.search(tl)
+    if mo: m["imdb"] = mo.group(1)
+    mo = YEAR_RE.search(tl)
+    if mo: m["year"] = int(mo.group(0))
+    if ANIME_TAG.search(tl):
+        m["kind"] = "anime"
+    elif S1E_RE.search(tl) or SRANGE_RE.search(tl) or XN_RE.search(tl) or SEASW_RE.search(tl) or SEAS_RE.search(tl) or TV_RE.search(tl):
+        m["kind"] = "tv"
+    elif re.search(r'\bmovie\b|\bcinema\b|\btheatrical\b', tl):
+        m["kind"] = "movie"
+    elif QUALITY_RE[0][1].search(tl) and mo:
+        m["kind"] = "movie"
+    if GAME_RE.search(tl):
+        m["kind"] = "game"
+    if SERIES_RE.search(tl):
+        m["series_pack"] = True
+
+    m["badge"] = cat_badge(t) or "·"
+    return m
+
+class Query:
+    __slots__ = ("title", "season", "episode", "year", "kind", "quality", "codec",
+                 "hdr", "dv", "audio", "lang", "min_seeds", "min_size", "max_size",
+                 "imdb", "tmdb", "idname", "raw")
+    def __init__(self, raw=""):
+        self.title = ""; self.season = self.episode = self.year = None
+        self.kind = None; self.quality = None; self.codec = None
+        self.hdr = self.dv = None; self.audio = None; self.lang = None
+        self.min_seeds = 0; self.min_size = self.max_size = None
+        self.imdb = self.tmdb = None; self.idname = None; self.raw = raw
+    @property
+    def title_tokens(self): return [t for t in re.split(r'\s+', self.title.lower().strip()) if t]
+    def __repr__(self): return f"<Query {self.raw!r} → {self.__dict__}>"
+
+QC_QUAL = {"1080p": "1080p", "2160p": "2160p", "720p": "720p", "480p": "480p", "4k": "2160p", "uhd": "2160p"}
+QC_CODEC = {"h264": "h264", "x264": "h264", "avc": "h264", "h265": "h265", "hevc": "h265", "x265": "h265", "av1": "av1"}
+QC_AUDIO = {"truehd": "truehd", "dts": "dts", "dtshd": "dtshd", "dtsx": "dtsx", "ac3": "ac3", "dd": "ac3", "aac": "aac", "atmos": "atmos", "flac": "flac", "mp3": "mp3"}
+QC_LANG = {"en":"eng","eng":"eng","english":"eng","de":"ger","ger":"ger","jap":"jap","ja":"jap","japanese":"jap","es":"esp","esp":"esp","fr":"fre","fre":"fre","multi":"multi","sub":"sub","subs":"sub"}
+QC_KIND = {"tv":"tv","show":"tv","series":"tv","movie":"movie","film":"movie","anime":"anime","game":"game","games":"game","pc":"game"}
+
+def build_query(raw):
+
+    q = Query(raw)
+    if not raw: return q
+    toks = raw.split()
+    title = []
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        tl = t.lower()
+        if tl == "season" and i + 1 < len(toks) and toks[i + 1].isdigit() and len(toks[i + 1]) <= 2:
+            q.season = int(toks[i + 1]); i += 2; continue
+        elif tl.startswith("season") and tl[6:].isdigit() and 1 <= len(tl) - 6 <= 2:
+            q.season = int(tl[6:]); i += 1; continue
+        m = re.match(r'min(?:imum)?:?(\d+)$', tl)
+        if m: q.min_seeds = int(m.group(1)); i += 1; continue
+        m = re.match(r'(min|minsize|min_size|size):(\d+(?:\.\d+)?)\s*(kb|mb|gb|tb)?$', t, re.I)
+        if m:
+            q.min_size = _sz_bytes(f"{m.group(2)}{m.group(3)}") if m.group(3) else int(float(m.group(2)))
+            i += 1; continue
+        m = re.match(r'(max|maxsize|max_size):(\d+(?:\.\d+)?)\s*(kb|mb|gb|tb)?$', t, re.I)
+        if m:
+            q.max_size = _sz_bytes(f"{m.group(2)}{m.group(3)}") if m.group(3) else int(float(m.group(2)))
+            i += 1; continue
+        m = re.match(r'(q|quality|res):(.+)$', t, re.I)
+        if m:
+            v = m.group(2).lower().strip('[]')
+            if v in QC_QUAL and v != "": q.quality = QC_QUAL[v]
+            i += 1; continue
+        m = re.match(r'(c|codec):(.+)$', t, re.I)
+        if m:
+            v = m.group(2).lower().strip('[]')
+            if v in QC_CODEC: q.codec = QC_CODEC[v]
+            i += 1; continue
+        m = re.match(r'(a|audio):(.+)$', t, re.I)
+        if m:
+            v = m.group(2).lower().strip('[]')
+            if v in QC_AUDIO: q.audio = QC_AUDIO[v]
+            i += 1; continue
+        m = re.match(r'(l|lang|language):(.+)$', t, re.I)
+        if m:
+            v = m.group(2).lower().strip('[]')
+            if v in QC_LANG: q.lang = QC_LANG[v]
+            i += 1; continue
+        m = re.match(r'(t|type):(.+)$', t, re.I)
+        if m:
+            v = m.group(2).lower().strip('[]')
+            if v in QC_KIND: q.kind = QC_KIND[v]
+            i += 1; continue
+        if tl in ("hdr", "hdr10", "hdr10+", "dv", "dolby", "dolbyvision", "4kdcp"):
+            q.hdr = True
+            if tl in ("dv", "dolby", "dolbyvision", "hdr10+"): q.dv = True
+            i += 1; continue
+        if tl in ("no-hdr", "nohdr"):
+            q.hdr = False; i += 1; continue
+
+        if tl in QC_QUAL:
+            q.quality = QC_QUAL[tl]; i += 1; continue
+        if tl in QC_CODEC:
+            q.codec = QC_CODEC[tl]; i += 1; continue
+        if tl in QC_AUDIO and tl not in QC_CODEC:
+            q.audio = QC_AUDIO[tl]; i += 1; continue
+        if tl in QC_KIND and len(tl) <= 6:
+            q.kind = QC_KIND[tl]; i += 1; continue
+        m = re.match(r'(?:imdb[:_-]?)?(tt\d{7,8})$', tl)
+        if m: q.imdb = m.group(1); i += 1; continue
+        m = re.match(r'tmdb[:_-]?(\d+)$', tl)
+        if m: q.tmdb = m.group(1); i += 1; continue
+        m = re.match(r's(\d{1,2})e(\d{1,3})$', tl)
+        if m:
+            q.season, q.episode = int(m.group(1)), int(m.group(2)); i += 1; continue
+        m = re.match(r's(\d{1,2})$', tl)
+        if m and len(tl) < 5:
+            q.season = int(m.group(1)); i += 1; continue
+        m = re.match(r'e(\d{1,3})$', tl)
+        if m:
+            q.episode = int(m.group(1)); i += 1; continue
+        m = re.match(r'(\d{1,2})x(\d{1,3})$', tl)
+        if m:
+            q.season, q.episode = int(m.group(1)), int(m.group(2)); i += 1; continue
+        m = re.match(r'(?:19|20)\d{2}$', tl)
+        if m:
+            q.year = int(m.group(0)); i += 1; continue
+        title.append(t)
+        i += 1
+    q.title = " ".join(title).strip()
+    if q.imdb:
+        q.idname = classify_lookup(q.imdb)
+        if q.idname and not q.title: q.title = q.idname
+    elif q.tmdb:
+        q.idname = tmdb_lookup(q.tmdb, q.kind)
+        if q.idname and not q.title: q.title = q.idname
+    return q
+
+def classify_lookup(imdb_id):
+
+    ck = "id:" + imdb_id.lower()
+    v = cache_get(ck)
+    if v == "!": return None
+    if v: return v
+    name = None
+    try:
+        r = requests.get(f"https://v2.sg.media-imdb.com/suggestion/x/{imdb_id}.json",
+                         headers=HEADERS, timeout=12)
+        if r.status_code == 200:
+            d = r.json().get("d", [])
+            for it in d:
+                if it.get("id", "").lower() == imdb_id.lower():
+                    name = it.get("l"); break
+            if name is None and d: name = d[0].get("l")
+    except Exception:
+        pass
+    cache_set(ck, name or "!", ttl=2592000)
+    return name
+
+def tmdb_lookup(tmdb_id, kind=None):
+
+    ck = "tmdb:" + str(tmdb_id) + ":" + (kind or "?")
+    v = cache_get(ck)
+    if v == "!": return None
+    if v: return v
+    import html as _html
+    name = None
+    for k in ([kind] if kind else ["tv", "movie"]):
+        if not k: continue
+        try:
+            r = requests.get(f"https://www.themoviedb.org/{k}/{tmdb_id}", headers=HEADERS, timeout=12)
+            if r.status_code != 200: continue
+            mo = re.search(r'<title>(.*?)</title>', r.text, re.I | re.S)
+            if mo:
+                raw = _html.unescape(mo.group(1)).strip()
+                raw = re.split(r'\s*[—–\-]\s*The Movie Database', raw, flags=re.I)[0].strip()
+
+                raw = re.sub(r'\s*\(\d{4}.*?\)\s*$', '', raw).strip()
+                raw = re.sub(r'\s+\(\d{4}\)', '', raw).strip()
+                if raw: name = raw; break
+        except Exception:
+            continue
+    cache_set(ck, name or "!", ttl=2592000)
+    return name
+
+def _tok_match(qtoks, rtok_letters):
+
+    return sum(1 for t in qtoks if t in rtok_letters or any(
+        len(rt) >= 4 and rt[:4] == t[:4] and len(t) >= 4 for rt in rtok_letters))
+
+def smart_score(r, q):
+
+    m = r.get("media") or media_parse(r["n"])
+    r["media"] = m
+    s = 0.0
+    qts = q.title_tokens
+    r_text = m["text"]
+    if qts:
+        hit = _tok_match(qts, [w for w in r_text.split()])
+        s += 55 * hit / len(qts)
+        if q.title.lower() == " ".join(r_text.split()[:len(qts)]):
+            s += 18
+    k = m.get("kind")
+    if q.kind:
+        if k == q.kind: s += 22
+        elif k and k != q.kind: s -= 60
+    rs, rex = m.get("season"), m.get("episode")
+    if q.season:
+        if rs == q.season: s += 45
+        elif rs is None:
+            if q.episode and k != "tv": s -= 25
+            elif m.get("series_pack") and k == "tv": s += 8
+            else: s -= 5
+        elif q.season is not None and m.get("season_max") is not None and q.season <= m["season_max"]: s += 28
+        else: s -= 60
+    if q.episode:
+        if rex == q.episode: s += 55
+        elif rex is None and not (m.get("season") == q.season and m.get("episode_max") and q.episode <= m["episode_max"]):
+            s -= 18
+        else: s -= 80
+    if q.year and m.get("year"):
+        s += 14 if m["year"] == q.year else -22
+    if q.quality and m.get("quality") == q.quality: s += 12
+    if q.codec and m.get("codec") == q.codec: s += 10
+    if q.hdr and m.get("hdr"): s += 8
+    if q.lang and q.lang in (m.get("lang") or []): s += 8
+    if q.audio and q.audio in (m.get("audio") or []): s += 7
+    s += math.log10(1 + r["s"]) * 8
+    return s
 
 def search_solidtorrents(q,n=30):
     r=[]
@@ -247,7 +569,7 @@ def search_solidtorrents(q,n=30):
     return r
 
 def search_tpb(q,n=30):
-    """ThePirateBay via the official apibay.org JSON API (info_hash, seeders, size)."""
+
     r=[]
     try:
         u=f"https://apibay.org/q.php?q={urllib.parse.quote(q)}"
@@ -285,7 +607,7 @@ def search_1337x(q,n=30):
     return r
 
 def search_torrentscsv(q,n=30):
-    """torrents-csv.com JSON API (infohash, seeders, size)."""
+
     r=[]
     try:
         u=f"https://torrents-csv.com/service/search?q={urllib.parse.quote(q)}"
@@ -300,7 +622,7 @@ def search_torrentscsv(q,n=30):
     return r
 
 def search_nyaa(q,n=30):
-    """Nyaa.si scrape (anime/general; magnets inline)."""
+
     r=[]
     try:
         u=f"https://nyaa.si/?f=0&c=0_0&q={urllib.parse.quote(q)}&s=seeders&o=desc"
@@ -322,12 +644,13 @@ def search_nyaa(q,n=30):
     return r
 
 def search_bitsearch(q,n=30,category=None,tag="BitSearch"):
-    """BitSearch scrape (magnets inline; stats parsed from card text).
-    category scopes to a section ('music') — that variant is its own engine."""
+
     r=[]
     try:
         u=f"https://bitsearch.to/search?q={urllib.parse.quote(q)}&sort=seeders"+(f"&category={category}" if category else "")
         resp=requests.get(u,headers=HEADERS,timeout=TIMEOUT,allow_redirects=True)
+        if resp.status_code in (429, 500):
+            time.sleep(2); resp=requests.get(u,headers=HEADERS,timeout=TIMEOUT,allow_redirects=True)
         if resp.status_code!=200: return r
         import bs4
         soup=bs4.BeautifulSoup(resp.text,'html.parser')
@@ -349,7 +672,7 @@ def search_bitsearch(q,n=30,category=None,tag="BitSearch"):
     return r
 
 def search_torlock(q,n=30):
-    """Torlock scrape (no inline magnets; details page has them -> lazy fetch)."""
+
     r=[]
     try:
         u=f"https://www.torlock.com/all/torrents/{urllib.parse.quote(q)}.html?sort=seeds"
@@ -373,7 +696,7 @@ def search_torlock(q,n=30):
     return r
 
 def search_lime(q,n=30):
-    """LimeTorrents scrape (no inline magnets; details page has them -> lazy fetch)."""
+
     r=[]
     try:
         u=f"https://www.limetorrents.lol/search/all/{urllib.parse.quote(q)}/seeds/1/"
@@ -398,14 +721,30 @@ def search_lime(q,n=30):
     except: pass
     return r
 
+def search_fitgirl(q,n=30):
+
+    r=[]
+    try:
+        u=f"https://fitgirl-repacks.site/?s={urllib.parse.quote(q)}"
+        resp=requests.get(u,headers=HEADERS,timeout=TIMEOUT)
+        if resp.status_code!=200: return r
+        import bs4
+        soup=bs4.BeautifulSoup(resp.text,'html.parser')
+        for a in soup.select('article h1 a, article h2 a, article h3 a, .entry-title a')[:n]:
+            href=a.get('href','')
+            if not href: continue
+            name=a.get_text(' ',strip=True) or '?'
+            r.append({'n':name,'s':0,'l':0,'sz':'?','szr':0,
+                      'src':'FitGirl','mag':'','web':href})
+    except: pass
+    return r
+
 def search_archive(q,n=30):
-    """archive.org — the open one. every kind of music, drum kits, beat packs,
-    and it's all legal so your ISP can only shrug. magnets come from each item's
-    own .torrent (lazy, see fetch_archive_magnet)."""
+
     r=[]
     try:
         fl="&fl[]=identifier&fl[]=title&fl[]=mediatype&fl[]=item_size&fl[]=downloads"
-        u=(f"https://archive.org/advancedsearch.php?q={urllib.parse.quote(f'({q}) AND mediatype:(audio)')}"
+        u=(f"https://archive.org/advancedsearch.php?q={urllib.parse.quote(f'({q}) AND (mediatype:(audio) OR mediatype:(software) OR mediatype:(movies))')}"
            f"&rows={n}&sort[]=downloads+desc{fl}&output=json")
         resp=requests.get(u,headers=HEADERS,timeout=TIMEOUT)
         if resp.status_code!=200: return r
@@ -420,7 +759,6 @@ def search_archive(q,n=30):
     except: pass
     return r
 
-# Engine registry — the gang's all here. order = display order of per-engine counts.
 ENGINES = [("SolidTorrents", search_solidtorrents),
            ("TPB",          search_tpb),
            ("1337x",        search_1337x),
@@ -430,10 +768,11 @@ ENGINES = [("SolidTorrents", search_solidtorrents),
            ("BitMusic",     lambda q, n=30: search_bitsearch(q, n, category="music", tag="BitMusic")),
            ("Torlock",      search_torlock),
            ("Lime",         search_lime),
+           ("FitGirl",      search_fitgirl),
            ("Archive",      search_archive)]
-# Engines whose results carry no magnet (fetched lazily from the details page).
-NO_MAGNET_ENGINES = {"1337x", "Torlock", "Lime", "Archive"}
-# Engines needing a bespoke lazy-magnet fetcher (archive.org: btih from the item's .torrent).
+
+NO_MAGNET_ENGINES = {"1337x", "Torlock", "Lime", "Archive", "FitGirl"}
+
 CUSTOM_MAGNET = {"Archive": fetch_archive_magnet}
 
 def dedupe_sort(all_r):
@@ -454,39 +793,114 @@ def dedupe_sort(all_r):
     return sorted(best.values(), key=lambda x: x['s'], reverse=True)
 
 def parse_query(q):
-    min_seeds=0; toks=[]
-    for t in q.split():
-        m=re.match(r'min:(\d+)$',t,re.I)
-        if m: min_seeds=int(m.group(1))
-        else: toks.append(t)
-    return ' '.join(toks), min_seeds
 
-def smart_score(r, qtokens, qfull):
-    tl=r['n'].lower()
-    matched=sum(1 for t in qtokens if t in tl)
-    rel=matched/max(len(qtokens),1)
-    if qfull and qfull in tl: rel+=0.5
-    return rel*100 + math.log10(1+r['s'])*25
+    bq = build_query(q)
+    return bq.title, bq.min_seeds
 
-# SEO-bait titles ([REAL]! Full Version!! Direct Download!!1). torlock, we're looking at you.
 JUNK_RE = re.compile(r'(\[real\]|\bfull version\b|\bhigh-definition\b|\blatest top release\b|\bdirect download\b)', re.I)
 
-def rank_filter(results, query='', sort='smart', min_seeds=0, src=None, cached=None):
+def engine_query(q, raw):
+
+    def _local(t):
+        tl = t.lower()
+        return bool(re.match(r'^(min|min_size|minsize|size|max|max_size|maxsize'
+                             r'|lang|language|l|audio|a|tmdb|q|quality|res|c|codec|t|type):', tl)) or tl == 'no-hdr'
+    have = []
+    for t in raw.split():
+        tl = t.lower()
+        if re.match(r'^tt\d{7,8}$', tl):
+            if q.idname: have.append(q.idname)
+            continue
+        if re.match(r'^tmdb[:_-]?\d+$', tl):
+            if q.idname: have.append(q.idname)
+            continue
+        m = re.match(r'^(q|quality|res|c|codec):(.+)$', t, re.I)
+        if m and ':' in t: have.append(m.group(2)); continue
+        if _local(t): continue
+        have.append(t)
+
+    if q.idname:
+        want = {re.sub(r'[^a-z0-9]', '', w) for w in q.idname.lower().split()}
+        dropped_id = any(re.sub(r'[^a-z0-9]', '', t.lower()) in want for t in have)
+        if dropped_id:
+            have = [t for t in have if re.sub(r'[^a-z0-9]', '', t.lower()) not in want]
+            have.append(q.idname)
+    return ' '.join([k for k in have if k])
+
+def kind_badge(k):
+    return {"tv": g("📺"), "movie": g("🎬"), "anime": g("🌸"), "game": g("🎮")}.get(k, "·")
+
+def _merge_over(q, over):
+
+    n = Query(q.raw)
+    n.title, n.season, n.episode, n.year, n.kind = q.title, q.season, q.episode, q.year, q.kind
+    n.imdb, n.tmdb, n.min_seeds, n.max_size = q.imdb, q.tmdb, q.min_seeds, q.max_size
+    n.quality = over.get("quality", q.quality)
+    n.codec = over.get("codec", q.codec)
+    n.hdr = over.get("hdr", q.hdr)
+    n.dv = over.get("dv", q.dv)
+    n.audio = over.get("audio", q.audio)
+    n.lang = over.get("lang", q.lang)
+    n.min_size = over.get("min_size", q.min_size)
+    return n
+
+def q_label(q):
+
+    p = []
+    if q.title: p.append(f"[#79c0ff]{q.title}[/]")
+    if q.imdb: p.append(f"imdb:{q.imdb}")
+    if q.tmdb: p.append(f"tmdb:{q.tmdb}")
+    if q.kind: p.append(q.kind)
+    if q.season is not None:
+        s = f"S{q.season:02d}"
+        if q.episode is not None: s += f"E{q.episode:02d}"
+        p.append(s)
+    if q.year: p.append(str(q.year))
+    for label, val in (("q", q.quality), ("codec", q.codec), ("audio", q.audio), ("lang", q.lang)):
+        if val: p.append(f"{label}:{val}")
+    if q.hdr is True: p.append("hdr")
+    if q.hdr is False: p.append("no-hdr")
+    if q.dv: p.append("dv")
+    if q.min_seeds: p.append(f"min:{q.min_seeds}")
+    if q.min_size: p.append(f"size>={fs(q.min_size)}")
+    if q.max_size: p.append(f"size<={fs(q.max_size)}")
+    return " · ".join(p) if p else ""
+
+def rank_filter(results, query='', sort='smart', min_seeds=0, src=None, cached=None,
+                q=None, over=None):
+
     blk = blk_get()
-    out=[r for r in results if r['s']>=min_seeds and (not src or src in r['src'])
-         and not JUNK_RE.search(r['n']) and r.get('_id') not in blk
-         and (not cached or r.get('rd_cached'))]
-    if sort=='seeds': out.sort(key=lambda x: x['s'], reverse=True)
-    elif sort=='size': out.sort(key=lambda x: x['szr'], reverse=True)
-    elif sort=='name': out.sort(key=lambda x: x['n'].lower())
-    else:
-        qt=[t for t in re.split(r'\s+',query.lower().strip()) if t]; qf=query.lower().strip()
-        out.sort(key=lambda x: smart_score(x,qt,qf), reverse=True)
+    qo = _merge_over(q or build_query(query), over or {})
+    ms = max(min_seeds, qo.min_seeds)
+    out = []
+    for r in results:
+        m = r.get("media") or media_parse(r["n"]); r["media"] = m
+        if r['s'] < ms: continue
+        if src and src not in r['src']: continue
+        if JUNK_RE.search(r['n']) or r.get('_id') in blk: continue
+        if cached and not r.get('rd_cached'): continue
+        if qo.min_size and r.get("szr") and r['szr'] < qo.min_size: continue
+        if qo.max_size and r.get("szr") and r['szr'] > qo.max_size: continue
+        if qo.quality and m.get("quality") and m['quality'] != qo.quality: continue
+        if qo.codec and m.get("codec") and m['codec'] != qo.codec: continue
+        if qo.hdr is not None and m.get("hdr") is not None and m['hdr'] != qo.hdr: continue
+        if qo.dv and m.get("dv") is None: continue
+        if qo.audio and m.get("audio") and qo.audio not in m['audio']: continue
+        if qo.lang and m.get("lang") and qo.lang not in m['lang']: continue
+        if qo.kind and m.get("kind") and m['kind'] != qo.kind: continue
+        if qo.season and m.get("season") is not None and m['season'] != qo.season and not (
+                m.get("season_max") and qo.season <= m['season_max']): continue
+        if qo.episode and m.get("episode") is not None and m['episode'] != qo.episode and not (
+                m.get("episode_max") and qo.episode <= m['episode_max']): continue
+        out.append(r)
+    if sort == 'seeds': out.sort(key=lambda x: x['s'], reverse=True)
+    elif sort == 'size': out.sort(key=lambda x: x['szr'], reverse=True)
+    elif sort == 'name': out.sort(key=lambda x: x['n'].lower())
+    else: out.sort(key=lambda x: smart_score(x, qo), reverse=True)
     return out
 
 def fetch_magnet(url):
-    """Scrape a details page for its magnet. Some trackers hide it there like
-    it's a treasure hunt. it's not fun treasure. it's just an extra request."""
+
     if not url: return None
     try:
         resp=requests.get(url,headers=HEADERS,timeout=TIMEOUT,allow_redirects=True)
@@ -542,7 +956,7 @@ def rd_request(method, path, data=None):
     except requests.RequestException as e:
         return {"error": f"network: {e}"}
     if r.status_code not in (200, 201, 204): return {"error": r.text}
-    if not r.content: return {}  # 204 No Content
+    if not r.content: return {}
     try: return r.json()
     except ValueError: return {}
 
@@ -698,31 +1112,37 @@ def download_file(url, fn, cb=None):
             if attempt==1: time.sleep(2)
     raise last
 
-
 def cmd_search(args):
     if not args.query:
-        print("Usage: odyssey.py search <query> [--sort smart|seeds|size|name] [--min-seeds N] [--cached]"); return
-    query,ms=parse_query(args.query)
-    min_seeds=args.min_seeds or ms
-    print(f"Searching for: {query}")
-    results,counts=search_all(query)
+        print("Usage: odyssey.py search <query> [--sort smart|seeds|size|name] [--min-seeds N] [--cached]\n"
+              "  query filters: s02 | s02e05 | 1080p | 2160p | 720p | h265 | hevc | hdr | dv\n"
+              "                | no-hdr | audio:truehd | lang:en | type:tv | min:20 | size:2gb | max:10gb | tt1234567")
+        return
+    bq = build_query(args.query)
+    eq = engine_query(bq, args.query)
+    min_seeds = args.min_seeds or bq.min_seeds
+    print(f"Searching for: {eq}")
+    results, counts = search_all(eq)
     stamp_cached(results)
     if args.cached and not db.get("rd_api_token"):
         print("(cached filter needs an RD token: odyssey.py token <token>)")
-    results=rank_filter(results,query,sort=args.sort,min_seeds=min_seeds,cached=args.cached)
+    results = rank_filter(results, sort=args.sort, min_seeds=min_seeds, cached=args.cached, q=bq)
     if not results: print("No results."); return
-    srcs=" | ".join(f"{k}: {v}" for k,v in counts.items())
-    print(f"\n{len(results)} results ({srcs}) sort={args.sort} min_seeds={min_seeds}{' cached-only' if args.cached else ''}\n")
-    hist_add(query)
-    for i,r in enumerate(results[:args.limit]):
-        badge=g("⚡") if r.get("rd_cached") else " "
-        print(f"[{i:>3}] {badge} {cat_badge(r['n'])} {r['s']:>5}S {r['l']:>5}L  {r['sz']:>10}  {r['src']:<20}  {tr(r['n'],60)}")
+    srcs = " | ".join(f"{k}: {v}" for k, v in counts.items())
+    intent = q_label(bq)
+    print(f"\n{len(results)} results ({srcs}) sort={args.sort}{' cached-only' if args.cached else ''} {intent}\n")
+    hist_add(eq or args.query)
+    for i, r in enumerate(results[:args.limit]):
+        badge = g("⚡") if r.get("rd_cached") else " "
+        m = r.get("media")
+        tags = (m.get("quality") or "    ") + " " + (m.get("codec") or "") + (" HDR" if m.get("hdr") else "")
+        print(f"[{i:>3}] {badge} {cat_badge(r['n'])} {r['s']:>5}S {r['l']:>5}L  {r['sz']:>9} {tags:<16} {r['src']:<20} {tr(r['n'],52)}")
         if args.detail:
             if r.get('mag'): print(f"      magnet: {r['mag'][:70]}...")
             if r.get('web'): print(f"      web: {r['web']}")
     if args.download is not None:
-        idx=args.download
-        if 0<=idx<len(results): cmd_download_from_result(results[idx])
+        idx = args.download
+        if 0 <= idx < len(results): cmd_download_from_result(results[idx])
 
 def cmd_download_from_result(r):
     token=db.get("rd_api_token")
@@ -829,7 +1249,7 @@ if TUI_OK:
         return Text(str(v), style="#d29922" if v else "#6e7681", justify="right")
 
     class TokenScreen(ModalScreen):
-        """Modal for entering / validating the Real-Debrid API token."""
+
         CSS = """
         TokenScreen { align: center middle; }
         #token-box { width: 74; height: auto; background: #161b22; border: round #58d6eb; padding: 1 3; }
@@ -873,7 +1293,7 @@ if TUI_OK:
                 self.query_one("#token-error", Label).update(g("[#f85149]✗ Invalid token — try again.[/]"))
 
     class FilesScreen(ModalScreen):
-        """Modal listing unrestricted RD files; pick one or all to download."""
+
         CSS = """
         FilesScreen { align: center middle; }
         #files-box { width: 90; max-width: 95%; height: auto; background: #161b22; border: round #3fb950; padding: 1 3; }
@@ -895,7 +1315,7 @@ if TUI_OK:
         def action_cancel(self): self.dismiss(None)
 
     class RDScreen(ModalScreen):
-        """Modal listing torrents cached on Real-Debrid (x to delete)."""
+
         CSS = """
         RDScreen { align: center middle; }
         #rd-box { width: 100; max-width: 95%; height: auto; background: #161b22; border: round #bc8cff; padding: 1 3; }
@@ -948,11 +1368,18 @@ if TUI_OK:
     HELP_TEXT = """\
 [bold #7ee787]⚡ ODYSSEY SEARCHER[/]  [#8b949e]— keyboard shortcuts[/]
 
-[bold #79c0ff]SEARCH[/]
+[bold #79c0ff]SEARCH (live — results stream in as you type)[/]
   [#58d6eb]/[/]          focus search box
-  [#58d6eb]Enter[/]      run search
+  [#58d6eb]Enter[/]      run search immediately
   [#58d6eb]↑ / ↓[/]      previous searches
-  [#58d6eb]min:N[/]      in query → hide below N seeders
+  [#58d6eb]s02[/]        in query → season 2 · s02e05 → that episode
+  [#58d6eb]1080p[/]      quality filter (2160p · 720p · 480p)
+  [#58d6eb]h265[/]       codec filter (h264 · hevc · av1)
+  [#58d6eb]hdr[/]        HDR-only · no-hdr · dv (Dolby Vision)
+  [#58d6eb]audio:truehd[/]  audio filter (dts · ac3 · atmos · aac …)
+  [#58d6eb]lang:en[/]    language hint · type:tv|movie|anime|game
+  [#58d6eb]min:N[/]      hide below N seeders · size:2gb · max:10gb
+  [#58d6eb]tt1234567[/]  IMDb id search · tmdb:12345 too
 
 [bold #79c0ff]RESULTS[/]
   [#58d6eb]↑ / ↓[/]      navigate
@@ -961,6 +1388,7 @@ if TUI_OK:
   [#58d6eb]Esc[/]        clear marks
   [#58d6eb]o[/]          sort: smart → seeds → size → name
   [#58d6eb]f[/]          filter by source
+  [#58d6eb]Shift+F[/]    ⚙ media filters (quality·codec·HDR·audio·lang·size)
   [#58d6eb]c[/]          toggle ⚡ cached-only (instant on RD)
   [#58d6eb]C[/]          clear all filters
   [#58d6eb]x[/]          hide this result (persisted)
@@ -979,7 +1407,7 @@ if TUI_OK:
 [#8b949e]Esc closes this window[/]"""
 
     class HelpScreen(ModalScreen):
-        """Keybinding cheat-sheet (? to open, Esc to close)."""
+
         CSS = """
         HelpScreen { align: center middle; }
         #help-box { width: 62; height: auto; background: #161b22; border: round #f778ba; padding: 1 3; }
@@ -988,6 +1416,76 @@ if TUI_OK:
         def compose(self) -> ComposeResult:
             with Container(id="help-box"):
                 yield Static(g(HELP_TEXT))
+        def action_cancel(self): self.dismiss(None)
+
+    class FilterScreen(ModalScreen):
+
+        QUAL  = [None, "2160p", "1080p", "720p", "480p"]
+        CODEC = [None, "h265", "h264", "av1"]
+        HDR   = [None, True, False]
+        DV    = [None, True]
+        AUDIO = [None, "truehd", "dtsx", "dtshd", "dts", "ac3", "aac", "atmos", "flac"]
+        LANG  = [None, "eng", "sub", "multi", "jap"]
+        SZGB  = [None, 1, 2, 5, 10, 20, 50, 100]
+        CSS = """
+        FilterScreen { align: center middle; }
+        #filter-box { width: 78; height: auto; background: #161b22; border: round #58a6ff; padding: 1 3; }
+        #filter-state { width: 100%; height: auto; color: #e6edf3; margin: 1 0 0 0; }
+        #filter-hint { width: 100%; height: 3; color: #8b949e; margin-top: 1; }
+        """
+        BINDINGS = [
+            Binding("escape", "cancel", "Close"),
+            Binding("q", "cycle_quality", "Quality", show=False),
+            Binding("c", "cycle_codec", "Codec", show=False),
+            Binding("h", "cycle_hdr", "HDR", show=False),
+            Binding("d", "cycle_dv", "Dolby Vision", show=False),
+            Binding("a", "cycle_audio", "Audio", show=False),
+            Binding("l", "cycle_lang", "Language", show=False),
+            Binding("s", "cycle_size", "Min size", show=False),
+        ]
+
+        def compose(self) -> ComposeResult:
+            with Container(id="filter-box"):
+                yield Label(g("[bold #58a6ff]⚙ FILTERS[/]  [#8b949e]cycle each with its key[/]"))
+                yield Static("", id="filter-state")
+                yield Label("[#8b949e]q:quality  c:codec  h:HDR  d:DolbyVision  a:audio  l:language  s:min-size  ·  Esc close[/]", id="filter-hint")
+
+        def refresh_state(self):
+            q = self.app._q_eff()
+            parts = [p for p in (q_label(q).split(" · ") if q_label(q) else [])]
+            extra = []
+            if self.app.src_filter: extra.append(f"src:{self.app.src_filter}")
+            if self.app.min_seeds: extra.append(f"min:{self.app.min_seeds}")
+            if self.app.cached_only: extra.append(g("⚡") + " cached")
+            line = " · ".join(parts + extra) if (parts or extra) else "[#8b949e]no filters — everything qualifies[/]"
+            self.query_one("#filter-state", Static).update(line or "[#8b949e]no filters[/]")
+
+        def _cycle(self, key, opts):
+            cur = self.app.fover.get(key)
+            try: i = opts.index(cur) if cur in opts else 0
+            except ValueError: i = 0
+            nxt = opts[(i + 1) % len(opts)]
+            self.app.fover[key] = nxt
+            self.app._apply_view()
+            self.refresh_state()
+
+        def action_cycle_quality(self): self._cycle("quality", self.QUAL)
+        def action_cycle_codec(self): self._cycle("codec", self.CODEC)
+        def action_cycle_hdr(self): self._cycle("hdr", self.HDR)
+        def action_cycle_dv(self): self._cycle("dv", self.DV)
+        def action_cycle_audio(self): self._cycle("audio", self.AUDIO)
+        def action_cycle_lang(self): self._cycle("lang", self.LANG)
+
+        def action_cycle_size(self):
+            cur = self.app.fover.get("min_size")
+            gb = (round(cur / 1073741824) if cur else None)
+            try: i = self.SZGB.index(gb) if gb in self.SZGB else 0
+            except ValueError: i = 0
+            nxt = self.SZGB[(i + 1) % len(self.SZGB)]
+            self.app.fover["min_size"] = nxt * 1073741824 if nxt else None
+            self.app._apply_view()
+            self.refresh_state()
+
         def action_cancel(self): self.dismiss(None)
 
     class TorrentApp(App):
@@ -1018,6 +1516,7 @@ if TUI_OK:
             Binding("d", "download", "Download"),
             Binding("o", "sort", "Sort"),
             Binding("f", "filter_src", "Filter"),
+            Binding("shift+f", "filters", "Media filters"),
             Binding("c", "toggle_cached", "Cached"),
             Binding("x", "hide", "Hide"),
             Binding("t", "token", "Token"),
@@ -1035,6 +1534,8 @@ if TUI_OK:
             self.results = []
             self.view = []
             self.query = ""
+            self.q = Query()
+            self.fover = {}
             self.sort_mode = "smart" if pref_get("sort", "smart") not in SORT_MODES else pref_get("sort", "smart")
             self.src_filter = None
             self.min_seeds = 0
@@ -1044,6 +1545,11 @@ if TUI_OK:
             self._queue = []
             self._hist_i = -1
             self._hist_draft = ""
+            self._search_n = 0
+            self._want_focus = False
+            self._live_timer = None
+            self._live_val = None
+            self._live_suppress = False
 
         def compose(self) -> ComposeResult:
             with Horizontal(id="topbar"):
@@ -1073,15 +1579,19 @@ if TUI_OK:
             return idx, self.view[idx]
 
         def on_mount(self):
-            self.query_one("#results", DataTable).add_columns("#", g("⚡"), "Cat", "Seeds", "Leech", "Size", "Source", "Name")
+            t = self.query_one("#results", DataTable)
+            t.add_columns("#", g("⚡"), "Kind", "Seeds", "Leech", "Size", "Media", "Source", "Name")
             self._hide_pbar()
             self.query_one("#search", Input).focus()
-            self._status(f"[#8b949e]Type a query, hit Enter — {len(ENGINES)} engines · try[/] min:10 [#8b949e]to filter seeders[/]")
+            self._live_suppress = True
+            self._status(f"[#8b949e]Start typing — search is live · {len(ENGINES)} engines · try:[/] s02 1080p hdr h265 min:20")
+            self._live_suppress = False
             self._refresh_rd()
 
         def action_focus_search(self): self.query_one("#search", Input).focus()
         def action_status(self): self._refresh_rd()
         def action_help(self): self.push_screen(HelpScreen())
+        def action_filters(self): self.push_screen(FilterScreen())
 
         def action_mark(self):
             idx, r = self._current()
@@ -1089,7 +1599,7 @@ if TUI_OK:
             rid = r.get("_id")
             if rid in self.marked: self.marked.discard(rid)
             else: self.marked.add(rid)
-            self._apply_view(cursor_to=idx + 1)  # move down, lazygit-style
+            self._apply_view(cursor_to=idx + 1)
 
         def action_clear_marks(self):
             if self.marked:
@@ -1101,54 +1611,148 @@ if TUI_OK:
             if self.focused is not inp: return
             h = hist_get()
             if not h: return
+            self._live_suppress = True
             if self._hist_i == -1: self._hist_draft = inp.value
             self._hist_i = min(self._hist_i + 1, len(h) - 1)
             inp.value = h[self._hist_i]
             inp.cursor_position = len(inp.value)
+            self._live_suppress = False
 
         def action_hist_next(self):
             inp = self.query_one("#search", Input)
             if self.focused is not inp or self._hist_i == -1: return
+            self._live_suppress = True
             self._hist_i -= 1
             inp.value = self._hist_draft if self._hist_i == -1 else hist_get()[self._hist_i]
             inp.cursor_position = len(inp.value)
+            self._live_suppress = False
+
+        def _q_eff(self):
+            return _merge_over(self.q, self.fover)
 
         def _view_label(self):
             parts = [f"sort:{self.sort_mode}"]
+            ql = q_label(self._q_eff())
+            if ql: parts.insert(0, ql)
             if self.src_filter: parts.append(f"src:{self.src_filter}")
             if self.min_seeds: parts.append(f"min:{self.min_seeds}")
             if self.cached_only: parts.append(g("⚡") + " cached")
             return " · ".join(parts)
 
-        def _apply_view(self, cursor_to=None):
-            if not self.results and not self._counts:
-                self._status(f"[#8b949e]Type a query, hit Enter — {len(ENGINES)} engines · try[/] min:10 [#8b949e]to filter seeders[/]")
-                return
-            self.view = rank_filter(self.results, self.query, self.sort_mode, self.min_seeds, self.src_filter, self.cached_only)
-            t = self.query_one("#results", DataTable)
-            t.clear()
-            for i, r in enumerate(self.view):
-                marked = r.get("_id") in self.marked
-                t.add_row(Text(g(("✓" if marked else " ") + str(i)),
-                               style="bold #3fb950" if marked else "#8b949e"),
-                          Text(g("⚡") if r.get("rd_cached") else "", style="#f0c674" if r.get("rd_cached") else ""),
-                          Text(cat_badge(r["n"])),
-                          _seeds_cell(r["s"]),
-                          _leech_cell(r["l"]),
-                          Text(r["sz"], justify="right"),
-                          Text(r["src"], style=SRC_STYLE.get(r["src"].split("+")[0], "#8b949e")),
-                          Text(tr(r["n"], 68)),
-                          key=str(i))
-            if cursor_to is not None and self.view:
-                t.move_cursor(row=max(0, min(cursor_to, len(self.view) - 1)), animate=False)
+        def on_input_changed(self, event):
+            if self._live_suppress: return
+            v = event.value.strip()
+            if self._live_timer:
+                self._live_timer.stop(); self._live_timer = None
+            if len(v) < 3 or v == self._live_val: return
+            self._live_timer = self.set_timer(0.7, lambda v=v: self._fire_live(v))
+
+        def _fire_live(self, v):
+            self._live_timer = None
+            if not self.is_running: return
+            try: inp = self.query_one("#search", Input)
+            except Exception: return
+            if v != (inp.value or "").strip(): return
+            if v == self._live_val: return
+            self._launch_search(v, focus=False)
+
+        def on_input_submitted(self, event):
+            q = event.value.strip()
+            if not q: return
+            hist_add(q)
+            self._hist_i = -1
+            self._launch_search(q, focus=True)
+
+        def _launch_search(self, q, focus=True):
+            if self._live_timer:
+                self._live_timer.stop(); self._live_timer = None
+            bq = build_query(q)
+            eq = engine_query(bq, q)
+            self.q = bq
+            self.query = eq or q
+            self.min_seeds = bq.min_seeds
+            self._live_val = q
+            self.marked.clear()
+            self._search_n += 1
+            self._want_focus = focus
+            self.results = []
+            self._counts = {}
+            self._status(f"🔍 Searching [#79c0ff]{self.query}[/] on {len(ENGINES)} engines…")
+            t = self.query_one("#results", DataTable); t.clear()
+            for entry in ENGINES:
+                threading.Thread(target=self._run_engine, args=(entry, eq, self._search_n), daemon=True).start()
+
+        def _run_engine(self, entry, eq, token):
+            name, fn = entry
+            try: res = fn(eq)
+            except Exception: res = []
+            if token == self._search_n:
+                self.call_from_thread(self._engine_done, name, res, token)
+
+        def _engine_done(self, name, res, token):
+            if token != self._search_n: return
+            self._counts[name] = len(res)
+            if res:
+                try: self.results = dedupe_sort(self.results + res)
+                except Exception: pass
+                stamp_cached(self.results[:60])
+            done = len(self._counts)
+            self._apply_view()
+            if done < len(ENGINES):
+                got = " · ".join(f"{k}: {v}" for k, v in self._counts.items())
+                self._status(f"🔍 {done}/{len(ENGINES)} engines · [#79c0ff]{self.query}[/]  {got}")
+            else:
+                self._finalize()
+
+        def _finalize(self):
             srcs = " · ".join(f"{k}: {v}" for k, v in self._counts.items())
             marks = f" · [#3fb950]{len(self.marked)} marked[/]" if self.marked else ""
             if self.view:
+                if self._want_focus:
+                    self.query_one("#results", DataTable).focus()
+                    self._want_focus = False
                 self._status(f"[#3fb950]✓[/] {len(self.view)} shown / {len(self.results)} found · [#79c0ff]{self._view_label()}[/]{marks}  ({srcs})")
             else:
                 hint = ("cached-only — press c to show everything again" if self.cached_only
                         else "press C to clear filters")
                 self._status(f"[#f85149]✗ Nothing matches[/] · {self._view_label()} · {hint}")
+
+        def _media_cell(self, m):
+            if not m: return Text("")
+            bits = []
+            if m.get("quality"): bits.append(m["quality"])
+            if m.get("codec"): bits.append(m["codec"])
+            if m.get("hdr"): bits.append("HDR")
+            if m.get("dv"): bits.append("DV")
+            if m.get("audio"): bits.append("/".join(m["audio"][:2]))
+            if m.get("lang"): bits.append(m["lang"][0])
+            return Text(" ".join(bits), style="#e6edf3" if bits else "#484f58")
+
+        def _apply_view(self, cursor_to=None):
+            if not self.results and not self._counts:
+                self._status(f"[#8b949e]Start typing — search is live · {len(ENGINES)} engines · try:[/] s02 1080p hdr h265 min:20")
+                return
+            self.view = rank_filter(self.results, sort=self.sort_mode, min_seeds=self.min_seeds,
+                                    src=self.src_filter, cached=self.cached_only, q=self.q, over=self.fover)
+            t = self.query_one("#results", DataTable)
+            t.clear()
+            for i, r in enumerate(self.view):
+                m = r.get("media") or r.setdefault("media", media_parse(r["n"]))
+                marked = r.get("_id") in self.marked
+                t.add_row(Text(g(("✓" if marked else " ") + str(i)),
+                               style="bold #3fb950" if marked else "#8b949e"),
+                          Text(g("⚡") if r.get("rd_cached") else "", style="#f0c674" if r.get("rd_cached") else ""),
+                          Text(kind_badge(m.get("kind"))),
+                          _seeds_cell(r["s"]),
+                          _leech_cell(r["l"]),
+                          Text(r["sz"], justify="right"),
+                          self._media_cell(m),
+                          Text(r["src"], style=SRC_STYLE.get(r["src"].split("+")[0], "#8b949e")),
+                          Text(tr(r["n"], 56)),
+                          key=str(i))
+            if cursor_to is not None and self.view:
+                t.move_cursor(row=max(0, min(cursor_to, len(self.view) - 1)), animate=False)
+            if not self._counts: return
 
         def action_sort(self):
             self.sort_mode = SORT_MODES[(SORT_MODES.index(self.sort_mode) + 1) % len(SORT_MODES)]
@@ -1181,45 +1785,8 @@ if TUI_OK:
 
         def action_clear_filters(self):
             self.src_filter = None; self.min_seeds = 0; self.cached_only = False
+            self.fover = {}
             self._apply_view()
-
-        def on_input_submitted(self, event):
-            q = event.value.strip()
-            if q:
-                hist_add(q)
-                self._hist_i = -1
-                self.marked.clear()
-                self._search(q)
-
-        @work(thread=True, group="search", exclusive=True)
-        def _search(self, q):
-            clean, ms = parse_query(q)
-            self.query = clean or q
-            self.min_seeds = ms
-            self.call_from_thread(self._status, f"🔍 Searching [#79c0ff]{self.query}[/] on {len(ENGINES)} engines…")
-            bag, counts = [], {}
-            def run(name, fn):
-                try: res = fn(self.query)
-                except Exception: res = []
-                counts[name] = len(res); bag.extend(res)
-                self.call_from_thread(self._status,
-                    "🔍 " + " · ".join(f"{k}: {counts[k]}" for k in counts) + "…")
-            ts = [threading.Thread(target=run, args=e, daemon=True) for e in ENGINES]
-            for t in ts: t.start()
-            for t in ts: t.join()
-            results = dedupe_sort(bag)
-            stamp_cached(results)
-            self.call_from_thread(self._search_done, results, counts)
-
-        def _search_done(self, results, counts):
-            self.results = results
-            self._counts = counts
-            self._apply_view()
-            if self.view:
-                self.query_one("#results", DataTable).focus()
-            elif not results:
-                srcs = " · ".join(f"{k}: {v}" for k, v in counts.items())
-                self._status(f"[#f85149]✗ No results[/] for {self.query}  ({srcs})")
 
         def on_data_table_row_selected(self, event):
             r = self.view[int(event.row_key.value)]
@@ -1347,7 +1914,6 @@ if TUI_OK:
                 self._status(f"[#3fb950]✓ {saved}/{n} file(s)[/] saved to [#79c0ff]{DL_DIR}[/]")
                 self._refresh_rd()
 
-        # ── copy magnet ──
         def action_copy_magnet(self):
             idx, r = self._current()
             if r is None: return
@@ -1405,15 +1971,15 @@ def cmd_ui():
     if not TUI_OK:
         print("The TUI requires 'textual'.\nInstall it first:  pip install textual")
         return
-    if os.name == "nt":  # legacy conhost (Win10 cmd) ignores ANSI + UTF-8 by default
+    if os.name == "nt":
         try:
             import ctypes
             k32 = ctypes.windll.kernel32
             k32.SetConsoleOutputCP(65001); k32.SetConsoleCP(65001)
-            h = k32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            h = k32.GetStdHandle(-11)
             mode = ctypes.c_uint32()
             k32.GetConsoleMode(h, ctypes.byref(mode))
-            k32.SetConsoleMode(h, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            k32.SetConsoleMode(h, mode.value | 0x0004)
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         except Exception: pass
     TorrentApp().run()
@@ -1449,9 +2015,8 @@ def cmd_dl_history(args):
         sz = fs(size) if size else "?"
         print(f"{mark} {when}  {sz:>8}  {tr(title, 70)}  {status}")
 
-# ── Main ──
 def main():
-    try:  # never crash on emoji when stdout is piped through a legacy codepage
+    try:
         sys.stdout.reconfigure(errors="replace"); sys.stderr.reconfigure(errors="replace")
     except Exception: pass
     parser=argparse.ArgumentParser(description="Odyssey Searcher - Search + Real-Debrid (run with no arguments for the TUI)")
@@ -1496,7 +2061,7 @@ def main():
 
     args=parser.parse_args()
 
-    apply_prefs()  # pick up dl_dir & friends from the local db
+    apply_prefs()
 
     if args.cmd=="ui": cmd_ui()
     elif args.cmd=="search": cmd_search(args)
@@ -1515,3 +2080,5 @@ def main():
 
 if __name__=="__main__":
     main()
+
+# made by NikolisSec

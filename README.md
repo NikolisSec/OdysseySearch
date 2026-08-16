@@ -1,15 +1,15 @@
 ﻿<h1 align="center">OdysseySearch</h1>
 
 <p align="center">
-  <b>Search 10 trackers. Dedupe the noise. Download through Real-Debrid.</b><br/>
+  <b>Search 11 trackers. Dedupe the noise. Download through Real-Debrid.</b><br/>
   All from one terminal — no browser tabs, no copy-pasted magnets, no touching the swarm.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-2ea043?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"/>
   <img src="https://img.shields.io/badge/TUI-Textual-6c5ce7?style=flat-square" alt="TUI app"/>
-  <img src="https://img.shields.io/badge/Search-10%20trackers-58A6FF?style=flat-square" alt="10 trackers"/>
-  <img src="https://img.shields.io/badge/Real--Debrid-integrated-fa1e1e?style=flat-square" alt="Real-Debrid"/>
+  <img src="https://img.shields.io/badge/Search-11%20trackers-58A6FF?style=flat-square" alt="11 trackers"/>
+<img src="https://img.shields.io/badge/Real--Debrid-integrated-fa1e1e?style=flat-square" alt="Real-Debrid"/>
 </p>
 
 <p align="center">
@@ -38,9 +38,15 @@ A command-line torrent search engine + downloader:
 
 ## Features
 
-- **10 engines** — SolidTorrents, TPB (real API), 1337x, TorrentsCSV, Nyaa, BitSearch, BitMusic, Torlock, LimeTorrents, Archive.org — live per-engine counts in the status bar
+- **11 engines** — SolidTorrents, TPB (real API), 1337x, TorrentsCSV, Nyaa, BitSearch, BitMusic, Torlock, LimeTorrents, FitGirl Repacks, Archive.org — live per-engine counts in the status bar
 - **Infohash dedup** — same release on three sites → one row (`TPB + 1337x`), highest-seeded copy wins
 - **Smart ranking** — relevance first, so `ubuntu 24.04` gives ISOs, not "unrelated spam • 9999 seeders"
+- **Structured query parser** — `s02e05`, `season 2`, `1080p`, `h265`, `dv atmos`, `lang:el`, `min:20`, `size:2gb`, recorded for smart ranking
+- **Release forensics** — each result's episode/series/quality/codec/HDR/audio tagged automatically; raw queries filter on what the trackers themselves understand
+- **Live search** — the TUI streams results while you type (0.7 s debounce, `/`/`Enter` to lock in)
+- **Quick filters** — `Shift+F` modal cycles quality/codec/HDR/language/min-size without re-searching
+- **IMDb/TMDB id search** — `tt1234567` / `tmdb:12345` resolve to real titles automatically
+- **Gaming built in** — 🎮-flagged game releases (FitGirl/DODI/repacks + GOG, `t:game`/`pc` type filters); Archive.org covers legal abandonware, software, and games
 - **Bait filter** — `[REAL]`, `Full Version`, `Direct Download!!1` and friends, dropped on sight
 - **⚡ Instant badge + cached-only mode** — results already in RD's cache flagged up front; `c` shows only those
 - **Multi-select queue** — mark a few with `Space`, press `d`, walk away
@@ -71,7 +77,7 @@ python odyssey.py token <your-token>     # or press t inside the app
 Prefer a ready-made binary? Grab the latest release from the [Releases](https://github.com/NikolisSec/OdysseySearch/releases) page:
 
 - **Windows** - `odyssey.exe` (a single-file executable; no Python install needed)
-- **Debian/Ubuntu** - `odyssey_1.0.3_all.deb` (install with `sudo dpkg -i odyssey_1.0.3_all.deb`)
+- **Debian/Ubuntu** - `odyssey_1.0.4_all.deb` (install with `sudo dpkg -i odyssey_1.0.4_all.deb`)
 
 Both are built straight from `main` on every tagged release.
 
@@ -92,8 +98,9 @@ python odyssey.py       # launch the interface
 | `d` | start downloading the marked queue |
 | `o` | cycle sort: smart → seeds → size → name |
 | `f` | filter by source tracker |
+| `Shift+F` | quick filter modal (quality / codec / HDR / language / min size) |
 | `c` | toggle ⚡ cached-only mode |
-| `C` | clear all filters |
+| `C` | clear all filters (incl. quick filters) |
 | `x` | hide this result forever (blacklist) |
 | `m` | copy the magnet link to clipboard |
 | `t` | set / replace the RD API token |
@@ -102,7 +109,22 @@ python odyssey.py       # launch the interface
 | `?` | show the help overlay |
 | `q` | quit |
 
-Search syntax: `Mr. Robot 1080p min:20` → only non-spam 1080p results with 20+ seeders.
+Search with intent — the parser understands season/episode, releases, and filters,
+and the results stream in live as you type:
+
+```text
+breaking bad s02 1080p          # season-only tokens, quality
+archer s05e01 t:tv              # exact episode, type filter
+dune 2021 dv atmos              # Dolby Vision + Atmos specifically
+avatar 2009 tt0499549 1080p     # bare IMDb id, full metadata resolved automatically
+tmdb:1396 s01e01                # bare TMDB id (resolves via TMDb) + season/episode
+some movie 2160p h265 no-hdr    # no HDR copies
+show lang:el audio:dts min:10   # Greek subs matter, DTS audio, 10+ seeders
+big release size:20gb max:40gb  # size windows
+```
+
+Quick filters (`Shift+F`) narrow the current result set instantly the same way —
+no re-search needed.
 
 ### Scriptable (CLI)
 
@@ -125,6 +147,9 @@ Full key map, CLI flags, and privacy details live in the **[Wiki](https://github
 
 - [x] ⚡ Instant badge + cached-only mode
 - [x] Hidden local DB
+- [x] Structured search queries + release forensics (v1.0.4)
+- [x] Live search + quick filters (v1.0.4)
+- [x] IMDb / TMDB id search (v1.0.4)
 - [ ] `v` — stream straight into VLC
 - [ ] Saved searches that auto-grab into RD
 - [ ] AllDebrid / other providers
@@ -139,3 +164,4 @@ important part. 👍 If it works on yours, drop a star and say hi.
 <p align="center">
   <sub>OdysseySearch — search, dedupe, debrid. Not affiliated with Real-Debrid or any tracker.</sub>
 </p>
+## License
