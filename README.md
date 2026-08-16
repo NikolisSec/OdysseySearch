@@ -12,6 +12,12 @@
   <img src="https://img.shields.io/badge/Real--Debrid-integrated-fa1e1e?style=flat-square" alt="Real-Debrid"/>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/github/stars/NikolisSec/OdysseySearch?style=flat-square&logo=github&label=Stars" alt="GitHub stars"/>
+  <img src="https://img.shields.io/github/v/release/NikolisSec/OdysseySearch?style=flat-square&label=Latest%20Release" alt="Latest release"/>
+  <img src="https://img.shields.io/github/downloads/NikolisSec/OdysseySearch/total?style=flat-square&label=Downloads" alt="Total downloads"/>
+</p>
+
 ![Interface screenshot](docs/screenshot.svg)
 
 ---
