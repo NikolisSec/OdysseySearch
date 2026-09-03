@@ -164,4 +164,3 @@ important part. 👍 If it works on yours, drop a star and say hi.
 <p align="center">
   <sub>OdysseySearch — search, dedupe, debrid. Not affiliated with Real-Debrid or any tracker.</sub>
 </p>
-## License
